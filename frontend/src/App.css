@@ -1,0 +1,9 @@
+/* src/styles/global.css */
+
+@reference "../index.css";   /* ← this is the key line for Tailwind v4 */
+
+body {
+  @apply bg-gray-50 text-gray-900 antialiased;
+}
+
+/* You can add more global resets or base styles here */

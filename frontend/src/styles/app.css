@@ -1,0 +1,39 @@
+/* frontend/src/styles/app.css */
+
+@reference "../index.css";   /* tells Tailwind v4 where to find utilities */
+
+@layer base {
+  body {
+    @apply bg-gray-50 text-gray-900 antialiased min-h-screen;
+  }
+
+  h1, h2, h3 {
+    @apply font-bold text-green-800;
+  }
+}
+
+
+/* Add at the bottom of your global CSS file */
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(25px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.8s ease-out forwards;
+}
+
+.delay-200 {
+  animation-delay: 0.2s;
+}
+
+.animate-pulse-slow {
+  animation: pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}

@@ -1,0 +1,21 @@
+# .gitignore
+
+# dependencies
+node_modules/
+dist/
+build/
+
+# env files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# logs
+*.log
+
+# editor
+.vscode/
+.idea/
+.DS_Store

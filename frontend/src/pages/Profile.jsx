@@ -1,284 +1,334 @@
 // src/pages/Profile.jsx
 import { useState, useEffect } from 'react';
-import { useAuth } from '../contexts/AuthContext';
-import axios from 'axios';
-import { 
-  User, 
-  MapPin, 
-  Briefcase, 
-  FileText, 
-  Save, 
-  AlertCircle, 
-  CheckCircle2,
-  Loader2 
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext'; // Assuming API_BASE is exported or import it
+import toast from 'react-hot-toast';
+import {
+  User,
+  Camera,
+  Save,
+  Lock,
+  MapPin,
+  Loader2,
+  AlertCircle,
 } from 'lucide-react';
 
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
 export default function Profile() {
-  const { user } = useAuth();
-  
+  const { user, updateProfile, checkAuth } = useAuth();
+  const navigate = useNavigate();
+
   const [formData, setFormData] = useState({
     name: '',
-    location: '',
-    skills: '',
-    bio: '',
+    email: '',
+    address: '',
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
   });
-  
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
+
+  const [profilePhoto, setProfilePhoto] = useState(null);
+  const [photoPreview, setPhotoPreview] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    if (user) {
-      setFormData({
-        name: user.name || '',
-        location: user.location || '',
-        skills: user.skills?.join(', ') || '',
-        bio: user.bio || '',
-      });
-      setIsLoading(false);
+    if (!user) {
+      navigate('/login');
+      return;
     }
-  }, [user]);
 
-  const handleChange = (e) => {
-    setFormData(prev => ({
-      ...prev,
-      [e.target.name]: e.target.value
-    }));
+    setFormData({
+      name: user.name || '',
+      email: user.email || '',
+      address: user.address || '',
+      currentPassword: '',
+      newPassword: '',
+      confirmPassword: '',
+    });
+
+    // Set preview: blob (new) or full backend URL (existing)
+    if (user.profilePicture) {
+      const src = user.profilePicture.startsWith('http')
+        ? user.profilePicture
+        : `${API_BASE}${user.profilePicture.startsWith('/') ? '' : '/'}${user.profilePicture}`;
+      setPhotoPreview(src);
+    } else {
+      setPhotoPreview(null);
+    }
+
+    // Cleanup blob URLs
+    return () => {
+      if (photoPreview && photoPreview.startsWith('blob:')) {
+        URL.revokeObjectURL(photoPreview);
+      }
+    };
+  }, [user, navigate]);
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handlePhotoChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image must be less than 5MB');
+      return;
+    }
+
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      toast.error('Only JPG, PNG, or WebP allowed');
+      return;
+    }
+
+    setProfilePhoto(file);
+    const previewUrl = URL.createObjectURL(file);
+    setPhotoPreview(previewUrl);
+
+    // Cleanup previous blob if exists
+    if (photoPreview && photoPreview.startsWith('blob:')) {
+      URL.revokeObjectURL(photoPreview);
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setMessage('');
-    setError('');
-    setIsSaving(true);
+    setIsSubmitting(true);
+
+    if (formData.newPassword && formData.newPassword !== formData.confirmPassword) {
+      toast.error('New passwords do not match');
+      setIsSubmitting(false);
+      return;
+    }
 
     try {
-      const payload = {
-        name: formData.name.trim(),
-        location: formData.location.trim(),
-        bio: formData.bio.trim(),
-        skills: formData.skills
-          .split(',')
-          .map(s => s.trim())
-          .filter(Boolean),
-      };
+      const payload = new FormData();
 
-      await axios.put('http://localhost:5000/api/auth/profile', payload, {
-        withCredentials: true,
-      });
+      if (formData.name.trim()) payload.append('name', formData.name.trim());
+      if (formData.email.trim()) payload.append('email', formData.email.trim());
+      if (formData.address?.trim()) payload.append('address', formData.address.trim());
 
-      setMessage('Profile updated successfully!');
-      setTimeout(() => setMessage(''), 4000);
+      if (formData.newPassword && formData.currentPassword) {
+        payload.append('currentPassword', formData.currentPassword);
+        payload.append('newPassword', formData.newPassword);
+      }
+
+      if (profilePhoto) {
+        payload.append('profilePicture', profilePhoto);
+      }
+
+      await updateProfile(payload);
+
+      // Refresh user data (should now have updated profilePicture URL)
+      await checkAuth();
+
+      toast.success('Profile updated successfully!');
+      setProfilePhoto(null); // Clear file input state
+
+      setFormData((prev) => ({
+        ...prev,
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: '',
+      }));
     } catch (err) {
-      setError(
-        err.response?.data?.message || 
-        'Failed to update profile. Please try again.'
-      );
+      const msg = err.response?.data?.message || 'Failed to update profile';
+      toast.error(msg);
+      console.error('Profile update error:', err);
     } finally {
-      setIsSaving(false);
+      setIsSubmitting(false);
     }
   };
 
-  if (isLoading || !user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <Loader2 className="w-12 h-12 animate-spin text-green-600 mx-auto mb-4" />
-          <p className="text-gray-600">Loading profile...</p>
-        </div>
-      </div>
-    );
-  }
+  // Compute final image source with fallback
+  const avatarSrc = photoPreview || 
+    `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || 'User')}&background=10b981&color=fff&size=256`;
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white py-8 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-gray-50 py-10 px-5 sm:px-8 lg:px-12">
       <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-8 lg:mb-10">
-          <div>
-            <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 flex items-center gap-3">
-              <User className="w-9 h-9 text-green-600" />
-              Your Profile
-            </h1>
-            <p className="mt-2 text-gray-600">
-              Manage your personal information and preferences
-            </p>
-          </div>
-        </div>
+        <div className="bg-white rounded-2xl shadow-xl overflow-hidden border">
+          {/* Profile Header with Photo */}
+          <div className="bg-gradient-to-r from-green-600 to-emerald-700 px-8 py-14 text-white relative">
+            <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-start sm:justify-between">
+              <div className="relative group">
+                <img
+                  src={avatarSrc}
+                  alt="Profile"
+                  className="h-32 w-32 sm:h-40 sm:w-40 rounded-full object-cover border-4 border-white/90 shadow-2xl transition-all group-hover:scale-105 duration-300"
+                  onError={(e) => {
+                    e.target.src = `https://ui-avatars.com/api/?name=U&background=10b981&color=fff&size=256`;
+                  }}
+                />
 
-        {/* Messages */}
-        {message && (
-          <div className="mb-6 flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-xl text-green-800">
-            <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
-            <p>{message}</p>
-          </div>
-        )}
+                <label
+                  htmlFor="profile-photo"
+                  className="absolute bottom-2 right-2 flex h-10 w-10 cursor-pointer items-center justify-center rounded-full bg-white shadow-lg hover:bg-gray-100 transition-colors"
+                  title="Change profile picture"
+                >
+                  <Camera size={22} className="text-green-700" />
+                </label>
 
-        {error && (
-          <div className="mb-6 flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-xl text-red-800">
-            <AlertCircle className="w-5 h-5 flex-shrink-0" />
-            <p>{error}</p>
-          </div>
-        )}
+                <input
+                  id="profile-photo"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={handlePhotoChange}
+                  disabled={isSubmitting}
+                />
+              </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
-          {/* Left column - Read-only info */}
-          <div className="lg:col-span-1">
-            <div className="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden">
-              <div className="p-6 lg:p-8">
-                <h2 className="text-xl font-semibold text-gray-800 mb-6 flex items-center gap-2">
-                  <User className="w-5 h-5 text-green-600" />
-                  Account Information
-                </h2>
-
-                <div className="space-y-5">
-                  <div>
-                    <p className="text-sm text-gray-500">Full Name</p>
-                    <p className="font-medium text-gray-900 mt-1">{user.name}</p>
-                  </div>
-
-                  <div>
-                    <p className="text-sm text-gray-500">Email</p>
-                    <p className="font-medium text-gray-900 mt-1 break-all">{user.email}</p>
-                  </div>
-
-                  <div>
-                    <p className="text-sm text-gray-500">Role</p>
-                    <p className="font-medium capitalize text-gray-900 mt-1">
-                      {user.role === 'ngo' ? 'NGO / Organization' : user.role}
-                    </p>
-                  </div>
-
-                  {user.location && (
-                    <div>
-                      <p className="text-sm text-gray-500">Location</p>
-                      <p className="font-medium text-gray-900 mt-1">{user.location}</p>
-                    </div>
-                  )}
-                </div>
+              <div className="text-center sm:text-left">
+                <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">
+                  {formData.name || user?.name || 'Your Profile'}
+                </h1>
+                <p className="mt-2 text-green-100/90 text-lg">{formData.email || user?.email}</p>
+                {user?.address && (
+                  <p className="mt-1 text-green-100/80 flex items-center justify-center sm:justify-start gap-2">
+                    <MapPin size={18} />
+                    {user.address}
+                  </p>
+                )}
               </div>
             </div>
           </div>
 
-          {/* Right column - Edit form */}
-          <div className="lg:col-span-2">
-            <form 
-              onSubmit={handleSubmit} 
-              className="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden"
-            >
-              <div className="p-6 lg:p-8 space-y-7">
-                <h2 className="text-xl font-semibold text-gray-800 mb-2 flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-green-600" />
-                  Edit Profile Details
-                </h2>
+          {/* Form Content */}
+          <form onSubmit={handleSubmit} className="p-8 lg:p-10 space-y-12">
+            {/* Personal Info */}
+            <section>
+              <h2 className="text-2xl font-semibold text-gray-900 mb-6 flex items-center gap-3">
+                <User size={24} className="text-green-600" />
+                Personal Information
+              </h2>
 
-                {/* Name */}
+              <div className="grid gap-6 md:grid-cols-2">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    Full Name
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Full Name <span className="text-red-600">*</span>
                   </label>
-                  <div className="relative">
-                    <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                    <input
-                      type="text"
-                      name="name"
-                      value={formData.name}
-                      onChange={handleChange}
-                      className="w-full pl-11 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
-                      placeholder="Your full name"
-                    />
-                  </div>
-                </div>
-
-                {/* Location */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    Location
-                  </label>
-                  <div className="relative">
-                    <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                    <input
-                      type="text"
-                      name="location"
-                      value={formData.location}
-                      onChange={handleChange}
-                      className="w-full pl-11 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
-                      placeholder="e.g. Nagpur, Maharashtra"
-                    />
-                  </div>
-                </div>
-
-                {/* Skills - Volunteers only */}
-                {user.role === 'volunteer' && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                      Skills <span className="text-gray-500 text-xs">(comma separated)</span>
-                    </label>
-                    <div className="relative">
-                      <Briefcase className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                      <input
-                        type="text"
-                        name="skills"
-                        value={formData.skills}
-                        onChange={handleChange}
-                        className="w-full pl-11 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
-                        placeholder="waste sorting, driving, community outreach, awareness campaigns..."
-                      />
-                    </div>
-                    <p className="mt-1.5 text-xs text-gray-500">
-                      Examples: plastic sorting, event organization, transportation
-                    </p>
-                  </div>
-                )}
-
-                {/* Bio */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    Bio / About You
-                  </label>
-                  <textarea
-                    name="bio"
-                    value={formData.bio}
-                    onChange={handleChange}
-                    rows={5}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors resize-none"
-                    placeholder="Tell others a bit about yourself, your motivation for joining WasteZero, or your experience..."
+                  <input
+                    name="name"
+                    value={formData.name}
+                    onChange={handleInputChange}
+                    required
+                    disabled={isSubmitting}
+                    className="w-full px-5 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all shadow-sm"
                   />
                 </div>
 
-                {/* Submit */}
-                <div className="pt-4">
-                  <button
-                    type="submit"
-                    disabled={isSaving}
-                    className={`
-                      w-full sm:w-auto flex items-center justify-center gap-2 
-                      px-8 py-3.5 bg-gradient-to-r from-green-600 to-emerald-600 
-                      text-white font-semibold rounded-xl shadow-lg
-                      hover:from-green-700 hover:to-emerald-700 hover:shadow-xl
-                      focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500
-                      transition-all duration-200
-                      disabled:opacity-60 disabled:cursor-not-allowed
-                      active:scale-[0.98]
-                    `}
-                  >
-                    {isSaving ? (
-                      <>
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                        Saving...
-                      </>
-                    ) : (
-                      <>
-                        <Save className="w-5 h-5" />
-                        Save Changes
-                      </>
-                    )}
-                  </button>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Email Address <span className="text-red-600">*</span>
+                  </label>
+                  <input
+                    name="email"
+                    type="email"
+                    value={formData.email}
+                    onChange={handleInputChange}
+                    required
+                    disabled={isSubmitting}
+                    className="w-full px-5 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all shadow-sm"
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                    <MapPin size={18} className="text-green-600" />
+                    Address
+                  </label>
+                  <input
+                    name="address"
+                    value={formData.address}
+                    onChange={handleInputChange}
+                    placeholder="e.g. Kothrud, Pune, Maharashtra"
+                    disabled={isSubmitting}
+                    className="w-full px-5 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all shadow-sm"
+                  />
                 </div>
               </div>
-            </form>
-          </div>
+            </section>
+
+            {/* Password Change */}
+            <section className="border-t border-gray-200 pt-10">
+              <h2 className="text-2xl font-semibold text-gray-900 mb-6 flex items-center gap-3">
+                <Lock size={24} className="text-green-600" />
+                Change Password (optional)
+              </h2>
+
+              <div className="grid gap-6 md:grid-cols-2">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Current Password
+                  </label>
+                  <input
+                    name="currentPassword"
+                    type="password"
+                    value={formData.currentPassword}
+                    onChange={handleInputChange}
+                    placeholder="Required to change password"
+                    disabled={isSubmitting}
+                    className="w-full px-5 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all shadow-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    New Password
+                  </label>
+                  <input
+                    name="newPassword"
+                    type="password"
+                    value={formData.newPassword}
+                    onChange={handleInputChange}
+                    placeholder="Leave blank to keep current"
+                    disabled={isSubmitting}
+                    className="w-full px-5 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all shadow-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Confirm New Password
+                  </label>
+                  <input
+                    name="confirmPassword"
+                    type="password"
+                    value={formData.confirmPassword}
+                    onChange={handleInputChange}
+                    placeholder="Confirm new password"
+                    disabled={isSubmitting}
+                    className="w-full px-5 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all shadow-sm"
+                  />
+                </div>
+              </div>
+            </section>
+
+            {/* Submit Button */}
+            <div className="flex justify-end pt-6">
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className={`flex items-center gap-3 px-10 py-4 bg-green-600 hover:bg-green-700 text-white rounded-xl font-semibold shadow-md transition-all disabled:opacity-60 disabled:cursor-not-allowed`}
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 size={20} className="animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save size={20} />
+                    Save Changes
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
         </div>
       </div>
     </div>

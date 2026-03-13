@@ -1,5 +1,6 @@
 // src/pages/MyPosted.jsx
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 import {
@@ -14,6 +15,7 @@ import {
   Search,
   X,
   Upload,
+  Users,
 } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
@@ -331,6 +333,13 @@ export default function MyPosted() {
                       <Edit2 size={18} />
                       Edit
                     </button>
+                    <Link
+                      to={`/dashboard/opportunity-applications/${opp._id}`}
+                      className="flex items-center gap-2 px-5 py-2.5 text-green-600 hover:text-green-800 hover:bg-green-50 rounded-lg transition-colors"
+                    >
+                      <Users size={18} />
+                      Applications
+                    </Link>
                     <button
                       onClick={() => handleDelete(opp._id)}
                       className="flex items-center gap-2 px-5 py-2.5 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-colors"

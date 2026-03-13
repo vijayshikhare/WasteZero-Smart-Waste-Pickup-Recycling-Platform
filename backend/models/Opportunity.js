@@ -1,28 +1,30 @@
 const mongoose = require('mongoose');
 
+console.log('[Opportunity Model] File loaded - initializing schema');
+
 const opportunitySchema = new mongoose.Schema(
   {
     ngo_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
       required: [true, 'NGO reference is required'],
-      index: true, // fast lookup by NGO
+      index: true,
     },
 
     title: {
       type: String,
       required: [true, 'Opportunity title is required'],
       trim: true,
-      maxlength: [120, 'Title cannot exceed 120 characters'],
       minlength: [5, 'Title must be at least 5 characters'],
+      maxlength: [120, 'Title cannot exceed 120 characters'],
     },
 
     description: {
       type: String,
       required: [true, 'Description is required'],
       trim: true,
-      maxlength: [3000, 'Description cannot exceed 3000 characters'],
       minlength: [20, 'Description must be at least 20 characters'],
+      maxlength: [3000, 'Description cannot exceed 3000 characters'],
     },
 
     required_skills: {
@@ -47,18 +49,13 @@ const opportunitySchema = new mongoose.Schema(
     image: {
       type: String,
       default: null,
-      // Stored as relative path: /uploads/opportunities/xxx.jpg
-      // Full URL constructed in frontend: `${API_BASE}${image}`
     },
 
     status: {
       type: String,
-      enum: {
-        values: ['open', 'closed', 'completed'],
-        message: '{VALUE} is not a valid status',
-      },
+      enum: ['open', 'closed', 'completed'],
       default: 'open',
-      index: true, // fast filter open/closed/completed
+      index: true,
     },
   },
   {
@@ -69,37 +66,58 @@ const opportunitySchema = new mongoose.Schema(
 );
 
 // ────────────────────────────────────────────────
-// Indexes for performance
+// Indexes
 // ────────────────────────────────────────────────
-opportunitySchema.index({ status: 1, createdAt: -1 }); // common sort: newest open first
+opportunitySchema.index({ ngo_id: 1, status: 1, createdAt: -1 });
+opportunitySchema.index({ status: 1, createdAt: -1 });
 
 // ────────────────────────────────────────────────
-// Pre-save hook: clean required_skills
+// Virtuals
 // ────────────────────────────────────────────────
-opportunitySchema.pre('save', function (next) {
-  if (this.isModified('required_skills') && Array.isArray(this.required_skills)) {
-    this.required_skills = this.required_skills
-      .map(skill => (typeof skill === 'string' ? skill.trim() : ''))
-      .filter(skill => skill.length > 0);
-  }
-  next();
+opportunitySchema.virtual('applicationsCount', {
+  ref: 'Application',
+  localField: '_id',
+  foreignField: 'opportunity_id',
+  count: true,
 });
 
 // ────────────────────────────────────────────────
-// Virtual: populated NGO (optional — use .populate('ngo_id') in controller instead)
+// Pre-save hook – modern async style (no next() needed)
 // ────────────────────────────────────────────────
-// opportunitySchema.virtual('ngo', {
-//   ref: 'User',
-//   localField: 'ngo_id',
-//   foreignField: '_id',
-//   justOne: true,
-// });
+opportunitySchema.pre('save', async function () {
+  console.log('[PRE-SAVE HOOK] Starting pre-save middleware');
+
+  // Only run if required_skills was modified and is an array
+  if (this.isModified('required_skills') && Array.isArray(this.required_skills)) {
+    console.log('[PRE-SAVE] Cleaning required_skills array');
+
+    const cleaned = this.required_skills
+      .map((s) => (typeof s === 'string' ? s.trim() : ''))
+      .filter((s) => s.length > 0);
+
+    // Deduplicate case-insensitively
+    const seen = new Set();
+    this.required_skills = cleaned.filter((s) => {
+      const lower = s.toLowerCase();
+      if (seen.has(lower)) return false;
+      seen.add(lower);
+      return true;
+    });
+
+    console.log('[PRE-SAVE] Cleaned skills:', this.required_skills);
+  }
+
+  // No next() needed in async pre hooks – Mongoose waits for promise resolution
+  console.log('[PRE-SAVE HOOK] Completed successfully');
+});
 
 // ────────────────────────────────────────────────
-// Method: check if user is the owner (NGO)
+// Instance methods
 // ────────────────────────────────────────────────
 opportunitySchema.methods.isOwnedBy = function (userId) {
   return this.ngo_id.toString() === userId.toString();
 };
+
+console.log('[Opportunity Model] Schema and middleware fully registered');
 
 module.exports = mongoose.model('Opportunity', opportunitySchema);

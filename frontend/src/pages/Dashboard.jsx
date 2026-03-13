@@ -1,7 +1,7 @@
 // src/pages/Dashboard.jsx
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   Recycle,
@@ -13,6 +13,8 @@ import {
   Building2,
   AlertCircle,
   Loader2,
+  FileText,
+  BarChart3,
 } from 'lucide-react';
 
 export default function Dashboard() {
@@ -24,37 +26,58 @@ export default function Dashboard() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    let mounted = true;
+
     const fetchDashboardStats = async () => {
       if (!user?.role) return;
 
       setLoading(true);
       setError(null);
-
       try {
-        let endpoint = '';
+        // Try a list of possible endpoints (fallbacks) for each role so front-end is resilient
+        const endpointsByRole = {
+          ngo: ['/api/ngo/dashboard/stats', '/api/dashboard/ngo-stats'],
+          volunteer: ['/api/user/dashboard/stats', '/api/dashboard/volunteer-stats'],
+          admin: ['/api/admin/dashboard/stats', '/api/dashboard/admin-stats'],
+        };
 
-        if (user.role === 'ngo') {
-          endpoint = '/api/dashboard/ngo-stats';
-        } else if (user.role === 'volunteer') {
-          endpoint = '/api/dashboard/volunteer-stats';
-        } else if (user.role === 'admin') {
-          endpoint = '/api/dashboard/admin-stats';
-        } else {
-          throw new Error('Unknown role');
+        const endpoints = endpointsByRole[user.role] || [];
+        let lastErr = null;
+        for (const ep of endpoints) {
+          try {
+            const res = await api.get(ep);
+            if (!mounted) return;
+            setStats(res.data);
+            return;
+          } catch (err) {
+            lastErr = err;
+            // try next endpoint
+          }
         }
 
-        const res = await api.get(endpoint);
-        setStats(res.data);
+        // If none worked, throw the last error
+        throw lastErr || new Error('No endpoints defined for role');
       } catch (err) {
-        const msg = err.response?.data?.message || 'Failed to load dashboard data';
+        const msg = err?.response?.data?.message || 'Failed to load dashboard data';
         setError(msg);
         toast.error(msg);
       } finally {
-        setLoading(false);
+        if (mounted) setLoading(false);
       }
     };
 
+    // initial fetch
     fetchDashboardStats();
+
+    // Poll every 10 seconds for near-real-time updates; clean up on unmount
+    const interval = setInterval(() => {
+      fetchDashboardStats();
+    }, 10000);
+
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
   }, [api, user]);
 
   if (loading) {
@@ -163,6 +186,12 @@ export default function Dashboard() {
                 icon={<Clock className="h-10 w-10 text-amber-500 opacity-80" />}
                 color="amber"
               />
+              <StatCard
+                title="Total Waste Collected"
+                value={s.totalWasteKg}
+                icon={<Recycle className="h-10 w-10 text-teal-500 opacity-80" />}
+                color="teal"
+              />
             </>
           )}
 
@@ -202,7 +231,7 @@ export default function Dashboard() {
               title="Schedule New Pickup"
               description="Book waste collection from any location in Nagpur."
               buttonText="Schedule Pickup"
-              onClick={() => navigate('/pickups/new')}
+              onClick={() => navigate('/pickups')}
               color="green"
             />
           )}
@@ -245,6 +274,12 @@ export default function Dashboard() {
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Role Shortcuts / Links */}
+        <div className="mt-6">
+          <h3 className="text-lg font-semibold mb-3">Quick Links</h3>
+          <RoleLinks userRole={user?.role} />
         </div>
 
         {/* Recent Activity Section */}
@@ -351,6 +386,49 @@ function QuickActionCard({ title, description, buttonText, onClick, color = 'gre
       >
         {buttonText} <ArrowUpRight size={18} />
       </button>
+    </div>
+  );
+}
+
+// Role-based links component
+function RoleLinks({ userRole }) {
+  const linkSets = {
+    ngo: [
+      { to: '/pickups', label: 'Pickups', icon: <Recycle /> },
+      { to: '/dashboard/opportunities', label: 'Opportunities', icon: <Package /> },
+      { to: '/volunteers', label: 'Volunteers', icon: <Users /> },
+      { to: '/reports', label: 'Reports', icon: <FileText /> },
+    ],
+    volunteer: [
+      { to: '/opportunities', label: 'Opportunities', icon: <Package /> },
+      { to: '/my-applications', label: 'My Applications', icon: <CheckCircle2 /> },
+      { to: '/profile', label: 'Profile', icon: <Users /> },
+      { to: '/notifications', label: 'Notifications', icon: <AlertCircle /> },
+    ],
+    admin: [
+      { to: '/admin/users', label: 'User Management', icon: <Users /> },
+      { to: '/admin/analytics', label: 'Analytics', icon: <BarChart3 /> },
+      { to: '/admin/reports', label: 'Reports', icon: <FileText /> },
+      { to: '/settings', label: 'Settings', icon: <Building2 /> },
+    ],
+  };
+
+  const links = linkSets[userRole] || [];
+
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      {links.map((l) => (
+        <Link
+          to={l.to}
+          key={l.to}
+          className="bg-white rounded-xl border border-gray-100 p-4 flex flex-col items-start gap-3 hover:shadow-md transition-all"
+        >
+          <div className="text-green-600">{l.icon}</div>
+          <div>
+            <p className="font-semibold text-gray-900">{l.label}</p>
+          </div>
+        </Link>
+      ))}
     </div>
   );
 }

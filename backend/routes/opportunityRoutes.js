@@ -1,59 +1,79 @@
-// routes/opportunityRoutes.js
 const express = require('express');
+const mongoose = require('mongoose');
+
 const router = express.Router();
 
-const upload = require('../middleware/multer'); // your multer config
+const upload = require('../middleware/multer');
 const { protect, ngoOnly } = require('../middleware/authMiddleware');
+
+const opportunityController = require('../controllers/opportunityController');
 
 const {
   getAllOpportunities,
   getMyOpportunities,
   createOpportunity,
+  getOpportunityById,
   updateOpportunity,
   deleteOpportunity,
-} = require('../controllers/opportunityController');
+  getOpportunityApplications,
+} = opportunityController;
+
+// Safety check for missing handlers
+if (
+  !getAllOpportunities ||
+  !getMyOpportunities ||
+  !createOpportunity ||
+  !updateOpportunity ||
+  !deleteOpportunity
+) {
+  console.error('[OPPORTUNITY ROUTES FATAL] Missing required controller methods');
+  process.exit(1);
+}
+
+// Debug: log registered handlers on startup (comment out in production)
+console.log('[Opportunity Routes] Registered:', {
+  getAll: !!getAllOpportunities,
+  getMy: !!getMyOpportunities,
+  create: !!createOpportunity,
+  getById: !!getOpportunityById,
+  update: !!updateOpportunity,
+  delete: !!deleteOpportunity,
+  getApplications: !!getOpportunityApplications,
+});
+
+/**
+ * Public / Lightly Protected Routes
+ */
+router.get('/', getAllOpportunities);  // List all open opportunities - PUBLIC
+
+/**
+ * NGO-Only Specific Routes (MUST COME BEFORE :id routes!)
+ */
+router.get('/my', protect, ngoOnly, getMyOpportunities);  // My opportunities - fixed order
+
+// Create (no :id)
+router.post('/', protect, ngoOnly, upload.single('image'), createOpportunity);
 
 // ────────────────────────────────────────────────
-// Public / Authenticated Routes
+// Routes with :id - after all non-parametric routes
 // ────────────────────────────────────────────────
+router.get('/:id', getOpportunityById);  // View single opportunity - PUBLIC
 
-// GET all open opportunities (visible to logged-in users/volunteers)
-router.get('/', protect, getAllOpportunities);
+router.put('/:id', protect, ngoOnly, upload.single('image'), updateOpportunity);
 
-// ────────────────────────────────────────────────
-// NGO-Only Protected Routes
-// ────────────────────────────────────────────────
-
-// GET my posted opportunities (only for NGOs)
-router.get('/my', protect, ngoOnly, getMyOpportunities);
-
-// POST create new opportunity (NGO only, with image upload)
-router.post(
-  '/',
-  protect,
-  ngoOnly,
-  upload.single('image'), // field name must match frontend FormData.append('image', file)
-  createOpportunity
-);
-
-// PUT update existing opportunity (NGO only, optional image)
-router.put(
-  '/:id',
-  protect,
-  ngoOnly,
-  upload.single('image'),
-  updateOpportunity
-);
-
-// DELETE remove opportunity (NGO only)
 router.delete('/:id', protect, ngoOnly, deleteOpportunity);
 
-// Optional: Validate :id param is valid ObjectId (MongoDB style)
+router.get('/:id/applications', protect, ngoOnly, getOpportunityApplications);
+
+/**
+ * Global :id validation (now only applies to routes that actually have :id)
+ */
 router.param('id', (req, res, next, id) => {
-  if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+  if (!mongoose.Types.ObjectId.isValid(id)) {
     return res.status(400).json({
       success: false,
-      message: 'Invalid opportunity ID format',
+      message: 'Invalid opportunity ID format — must be a valid MongoDB ObjectId (24 hex chars)',
+      errorCode: 'INVALID_ID',
     });
   }
   next();

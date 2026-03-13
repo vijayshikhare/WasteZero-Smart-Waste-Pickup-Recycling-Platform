@@ -1,4 +1,3 @@
-// server.js
 require("dotenv").config();
 const express = require("express");
 const mongoose = require("mongoose");
@@ -14,26 +13,41 @@ const path = require("path");
 const authRoutes = require("./routes/authRoutes");
 const opportunityRoutes = require("./routes/opportunityRoutes");
 const applicationRoutes = require("./routes/applicationRoutes");
-const dashboardRoutes = require("./routes/dashboardRoutes"); // ← added
+const dashboardRoutes = require("./routes/dashboardRoutes");
+const adminRoutes = require("./routes/adminRoutes");
+const userRoutes = require("./routes/userRoutes");
+const ngoRoutes = require("./routes/ngoRoutes");
+const notificationRoutes = require("./routes/notificationRoutes");
+const messageRoutes = require("./routes/messageRoutes");
 
 const app = express();
 
-// ────────────────────────────────────────────────
-// Security & Middleware
-// ────────────────────────────────────────────────
+const isProduction = process.env.NODE_ENV === "production";
 
-app.set("trust proxy", 1); // Required for rate limiting + cookies behind proxies (Cloudflare, Nginx, etc.)
+// ────────────────────────────────────────────────
+// Trust proxy (needed for rate limiting, cookies on proxies like Render)
+// ────────────────────────────────────────────────
+app.set("trust proxy", 1);
 
-// Helmet with relaxed but safe CSP
+// ────────────────────────────────────────────────
+// Security Headers (Helmet) - loosened slightly for dev images
+// ────────────────────────────────────────────────
 app.use(
   helmet({
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        imgSrc: ["'self'", "data:", "https:", "http://localhost:5000", "http://localhost:5173"],
+        imgSrc: [
+          "'self'",
+          "data:",
+          "https:",
+          "http://localhost:5000",
+          "http://localhost:5173",
+          "http://localhost:*", // allow Vite random ports in dev
+        ],
         styleSrc: ["'self'", "'unsafe-inline'"],
-        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"], // remove unsafe-eval in strict prod
-        connectSrc: ["'self'", "http://localhost:5000", "http://localhost:5173", "https:"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+        connectSrc: ["'self'", "http://localhost:5000", "http://localhost:*", "https:"],
         fontSrc: ["'self'", "data:"],
       },
     },
@@ -44,23 +58,31 @@ app.use(
 
 app.use(compression());
 
-// CORS - dynamic origin check
+// ────────────────────────────────────────────────
+// CORS - more permissive in development
+// ────────────────────────────────────────────────
 const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:3000",
   "http://localhost:5174",
-  // Add your production domain(s) here:
-  // "https://wastezero-frontend.vercel.app",
-  // "https://your-domain.com",
+  "http://localhost:5175", // common Vite ports
+  // Add your production frontend domain later
 ];
 
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
+      if (isProduction) {
+        // Strict in production
+        if (!origin || allowedOrigins.includes(origin)) {
+          callback(null, true);
+        } else {
+          console.warn(`[CORS BLOCKED] Origin: ${origin}`);
+          callback(new Error("Not allowed by CORS"));
+        }
       } else {
-        callback(new Error("Not allowed by CORS"));
+        // Allow all in development (temporary - safe for local)
+        callback(null, true);
       }
     },
     credentials: true,
@@ -70,18 +92,42 @@ app.use(
 );
 
 // ────────────────────────────────────────────────
-// Body parsers & Cookies
+// Body & Cookie Parsing
 // ────────────────────────────────────────────────
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(cookieParser());
 
 // ────────────────────────────────────────────────
+// Debug: Log incoming cookies & uploads requests in dev
+// ────────────────────────────────────────────────
+if (!isProduction) {
+  app.use((req, res, next) => {
+    // Log cookies for auth debugging
+    if (req.cookies?.accessToken) {
+      console.log(
+        `[COOKIE IN] ${req.method} ${req.originalUrl} → accessToken present (preview): ${req.cookies.accessToken.substring(0, 15)}...`
+      );
+    } else if (req.originalUrl.includes("/api/") || req.originalUrl.includes("/uploads")) {
+      console.log(`[COOKIE IN] ${req.method} ${req.originalUrl} → NO accessToken cookie`);
+    }
+
+    // Log every /uploads request to debug image 404s
+    if (req.originalUrl.startsWith("/uploads")) {
+      console.log(`[UPLOADS REQUEST] ${req.method} ${req.originalUrl}`);
+    }
+
+    next();
+  });
+}
+
+// ────────────────────────────────────────────────
 // Rate Limiting
 // ────────────────────────────────────────────────
 const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 15, // stricter for login/register
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: isProduction ? 10 : 1000, // very permissive in dev
+  skip: (req) => !isProduction, // skip entirely in dev
   message: { success: false, message: "Too many login/registration attempts. Try again later." },
   standardHeaders: true,
   legacyHeaders: false,
@@ -89,17 +135,21 @@ const authLimiter = rateLimit({
 
 const apiLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
-  max: 120,
-  message: { success: false, message: "Too many requests from this IP, please try again later." },
+  max: isProduction ? 120 : 10000, // very permissive in dev
+  skip: (req) => !isProduction, // skip entirely in dev
+  message: { success: false, message: "Too many requests. Slow down." },
   standardHeaders: true,
   legacyHeaders: false,
 });
 
+// Always apply (skip will bypass in dev)
 app.use("/api/auth", authLimiter);
-app.use("/api/", apiLimiter); // general API rate limit
+app.use("/api/", apiLimiter);
 
-// Skip rate limit for health check
-app.use("/health", (req, res, next) => {
+console.log(`[RATE LIMIT] Mode: ${isProduction ? 'PRODUCTION (strict)' : 'DEVELOPMENT (disabled)'}`);
+
+// Skip rate limit for health & static
+app.get("/health", (req, res, next) => {
   res.setHeader("X-RateLimit-Skipped", "true");
   next();
 });
@@ -107,7 +157,7 @@ app.use("/health", (req, res, next) => {
 // ────────────────────────────────────────────────
 // Logging
 // ────────────────────────────────────────────────
-if (process.env.NODE_ENV === "development") {
+if (!isProduction) {
   app.use(morgan("dev"));
 } else {
   app.use(
@@ -118,22 +168,24 @@ if (process.env.NODE_ENV === "development") {
 }
 
 // ────────────────────────────────────────────────
-// Static Files — Uploads & Public
+// Static Files - Uploads & public
 // ────────────────────────────────────────────────
 app.use(
   "/uploads",
-  express.static(path.join(__dirname, "public/uploads"), {
-    maxAge: "1y", // long cache for images
+  express.static(path.join(__dirname, "public", "uploads"), {
+    maxAge: "1y",
     etag: true,
     setHeaders: (res) => {
       res.set("Cache-Control", "public, max-age=31536000, immutable");
-      res.set("Access-Control-Allow-Origin", "*"); // safe for images
+      res.set("Access-Control-Allow-Origin", "*");
     },
   })
 );
 
-// Serve favicon.ico and robots.txt from public folder
 app.use(express.static(path.join(__dirname, "public")));
+
+// Fallback for favicon (prevents 404 noise)
+app.get("/favicon.ico", (req, res) => res.status(204).end());
 
 // ────────────────────────────────────────────────
 // Routes
@@ -141,9 +193,16 @@ app.use(express.static(path.join(__dirname, "public")));
 app.use("/api/auth", authRoutes);
 app.use("/api/opportunities", opportunityRoutes);
 app.use("/api/applications", applicationRoutes);
-app.use("/api/dashboard", dashboardRoutes); // ← added
+app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/admin", adminRoutes);
+app.use("/api/user", userRoutes);
+app.use("/api/ngo", ngoRoutes);
+app.use("/api/notifications", notificationRoutes);
+app.use("/api/messages", messageRoutes);
 
-// Health check (public, no auth)
+// ────────────────────────────────────────────────
+// Health check
+// ────────────────────────────────────────────────
 app.get("/health", (req, res) => {
   const memory = process.memoryUsage();
   res.status(200).json({
@@ -160,7 +219,7 @@ app.get("/health", (req, res) => {
   });
 });
 
-// Root endpoint
+// Root route
 app.get("/", (req, res) => {
   res.json({
     message: "WasteZero API is running",
@@ -169,7 +228,9 @@ app.get("/", (req, res) => {
   });
 });
 
-// 404 handler
+// ────────────────────────────────────────────────
+// 404 Handler
+// ────────────────────────────────────────────────
 app.use((req, res) => {
   res.status(404).json({
     success: false,
@@ -177,23 +238,37 @@ app.use((req, res) => {
   });
 });
 
-// Global error handler
+// ────────────────────────────────────────────────
+// Global Error Handler - improved for validation errors
+// ────────────────────────────────────────────────
 app.use((err, req, res, next) => {
   console.error("[GLOBAL ERROR]", err.message, err.stack?.substring(0, 300));
-  const status = err.status || 500;
-  res.status(status).json({
+
+  let status = err.status || 500;
+  let response = {
     success: false,
-    message:
-      status < 500
-        ? err.message || "Bad request"
-        : process.env.NODE_ENV === "production"
-        ? "Internal server error"
-        : err.message || "Something went wrong",
-  });
+    message: "Internal server error",
+  };
+
+  if (err.name === "ValidationError") {
+    status = 400;
+    response.message = "Validation failed";
+    response.errors = Object.values(err.errors).map((e) => ({
+      field: e.path,
+      message: e.message,
+    }));
+  } else if (status < 500) {
+    response.message = err.message || "Bad request";
+  } else if (!isProduction) {
+    response.message = err.message;
+    response.stack = err.stack;
+  }
+
+  res.status(status).json(response);
 });
 
 // ────────────────────────────────────────────────
-// MongoDB Connection with retry
+// MongoDB Connection with retries
 // ────────────────────────────────────────────────
 const connectDB = async () => {
   const maxRetries = 5;
@@ -209,12 +284,12 @@ const connectDB = async () => {
       return;
     } catch (err) {
       retries++;
-      console.error(`MongoDB connection attempt ${retries}/${maxRetries} failed:`, err.message);
+      console.error(`MongoDB connect failed (${retries}/${maxRetries}):`, err.message);
       if (retries === maxRetries) {
         console.error("Max retries reached. Exiting...");
         process.exit(1);
       }
-      await new Promise((res) => setTimeout(res, 5000)); // wait 5s
+      await new Promise((r) => setTimeout(r, 5000));
     }
   }
 };
@@ -228,25 +303,26 @@ const PORT = process.env.PORT || 5000;
 
 const server = app.listen(PORT, () => {
   console.log(`Server running in ${process.env.NODE_ENV || "development"} mode on port ${PORT}`);
-  console.log(`Allowed CORS origins: ${allowedOrigins.join(", ")}`);
+  console.log(`Allowed CORS origins (prod): ${allowedOrigins.join(", ")}`);
   console.log(`Uploads served at: http://localhost:${PORT}/uploads`);
-  console.log(`Health check: http://localhost:${PORT}/health`);
+  console.log(`Health: http://localhost:${PORT}/health`);
 });
 
+// ────────────────────────────────────────────────
 // Graceful shutdown
+// ────────────────────────────────────────────────
 const gracefulShutdown = (signal) => {
-  console.log(`${signal} received. Shutting down gracefully...`);
+  console.log(`${signal} received. Shutting down...`);
   server.close(() => {
     console.log("HTTP server closed.");
     mongoose.connection.close(false, () => {
-      console.log("MongoDB connection closed.");
+      console.log("MongoDB closed.");
       process.exit(0);
     });
   });
 
-  // Force exit after 10s if not closed
   setTimeout(() => {
-    console.error("Could not close connections in time, forcefully shutting down");
+    console.error("Shutdown timeout → force exit");
     process.exit(1);
   }, 10000);
 };

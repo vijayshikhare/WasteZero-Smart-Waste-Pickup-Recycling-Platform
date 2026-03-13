@@ -1,8 +1,8 @@
 // src/pages/Opportunities.jsx
 import { useState, useEffect } from 'react';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth, publicApi } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
-import { Link } from 'react-router-dom'; // ← added this import
+import { Link, useNavigate } from 'react-router-dom';
 import {
   Briefcase,
   MapPin,
@@ -12,7 +12,6 @@ import {
   Plus,
   X,
   Upload,
-  Eye,
   Users,
   Edit,
 } from 'lucide-react';
@@ -22,6 +21,7 @@ const PLACEHOLDER_IMAGE = 'https://placehold.co/800x600/10b981/ffffff/png?text=V
 
 export default function Opportunities() {
   const { api, user } = useAuth();
+  const navigate = useNavigate();
 
   const [opportunities, setOpportunities] = useState([]);
   const [appliedIds, setAppliedIds] = useState(new Set());
@@ -52,7 +52,8 @@ export default function Opportunities() {
     setError(null);
 
     try {
-      const res = await api.get('/api/opportunities');
+      // Use public API for opportunities list
+      const res = await publicApi.get('/api/opportunities');
       console.log('[Opportunities] Raw /api/opportunities response:', res.data);
 
       let oppData = [];
@@ -70,6 +71,7 @@ export default function Opportunities() {
 
       if (user?.role === 'volunteer') {
         try {
+          // Use authenticated api for user-specific data
           const appsRes = await api.get('/api/applications/my');
           let appData = [];
 
@@ -154,6 +156,19 @@ export default function Opportunities() {
   };
 
   const handleApply = async (oppId) => {
+    // Check if user is authenticated
+    if (!user) {
+      toast.error('Please log in to apply for opportunities', { duration: 4000 });
+      navigate('/login', { state: { from: '/opportunities' } });
+      return;
+    }
+
+    // Check if user is a volunteer
+    if (user.role !== 'volunteer') {
+      toast.error('Only volunteers can apply for opportunities');
+      return;
+    }
+
     if (!window.confirm('Apply for this opportunity?')) return;
 
     try {
@@ -168,7 +183,14 @@ export default function Opportunities() {
   const openView = (opp) => setSelectedOpp(opp);
   const closeView = () => setSelectedOpp(null);
 
-  const isOwner = (opp) => user?.role === 'ngo' && opp?.createdBy === user?._id;
+  const isOwner = (opp) => {
+    if (user?.role !== 'ngo') return false;
+    // some endpoints return opp.ngo_id populated or just id, fallback to createdBy
+    const raw = opp?.ngo_id?._id ? opp.ngo_id._id : opp?.ngo_id || opp?.createdBy;
+    const owner = raw ? raw.toString() : '';
+    const me = user?._id ? user._id.toString() : '';
+    return owner === me;
+  };
 
   // ────────────────────────────────────────────────────────────────
   // RENDER
@@ -247,8 +269,10 @@ export default function Opportunities() {
             {opportunities.map((opp) => (
               <div
                 key={opp._id}
-                className="bg-white rounded-2xl shadow-lg border overflow-hidden hover:shadow-2xl transition-all duration-300 group flex flex-col"
+                className="bg-white rounded-2xl shadow-lg border overflow-hidden hover:shadow-2xl transition-all duration-300 group flex flex-col cursor-pointer"
+                onClick={() => openView(opp)}
               >
+                {/* Image Section */}
                 <div className="relative h-64 overflow-hidden bg-gradient-to-br from-green-500 to-emerald-700">
                   <img
                     src={opp.image ? `${API_BASE}${opp.image}` : PLACEHOLDER_IMAGE}
@@ -257,21 +281,23 @@ export default function Opportunities() {
                     onError={(e) => (e.target.src = PLACEHOLDER_IMAGE)}
                   />
                   <div className="absolute top-5 right-5">
-                    <span className="px-5 py-2 bg-green-800/90 text-white text-sm font-semibold rounded-full backdrop-blur-md shadow">
+                    <span className="px-4 py-1.5 bg-green-100 text-green-800 text-sm font-medium rounded-full backdrop-blur-sm shadow-sm border border-green-200">
                       {opp.status?.toUpperCase() || 'OPEN'}
                     </span>
                   </div>
                 </div>
 
+                {/* Content Section */}
                 <div className="p-7 flex flex-col flex-grow">
                   <h3 className="text-2xl font-bold text-gray-900 mb-4 line-clamp-2 group-hover:text-green-700 transition-colors">
                     {opp.title || 'Untitled Opportunity'}
                   </h3>
 
-                  <p className="text-gray-700 mb-6 line-clamp-4 flex-grow leading-relaxed">
+                  <p className="text-gray-700 mb-6 line-clamp-3 flex-grow leading-relaxed">
                     {opp.description || 'No description provided.'}
                   </p>
 
+                  {/* Details Row */}
                   <div className="space-y-3 text-gray-700 mb-6">
                     {opp.location && (
                       <div className="flex items-center gap-3">
@@ -287,6 +313,7 @@ export default function Opportunities() {
                     )}
                   </div>
 
+                  {/* Skills Tags */}
                   {opp.required_skills?.length > 0 && (
                     <div className="flex flex-wrap gap-2.5">
                       {opp.required_skills.slice(0, 5).map((skill) => (
@@ -304,51 +331,6 @@ export default function Opportunities() {
                       )}
                     </div>
                   )}
-                </div>
-
-                <div className="px-7 py-6 bg-gray-50 border-t flex flex-wrap items-center justify-between gap-4">
-                  <button
-                    onClick={() => openView(opp)}
-                    className="flex items-center gap-3 text-green-700 hover:text-green-900 font-semibold transition-colors"
-                  >
-                    <Eye size={20} />
-                    View Details
-                  </button>
-
-                  <div className="flex flex-wrap gap-5 items-center">
-                    {user?.role === 'volunteer' && (
-                      <button
-                        onClick={() => handleApply(opp._id)}
-                        disabled={appliedIds.has(opp._id)}
-                        className={`px-6 py-2.5 rounded-lg text-sm font-medium transition-all shadow-sm min-w-[120px] ${
-                          appliedIds.has(opp._id)
-                            ? 'bg-gray-200 text-gray-700 cursor-not-allowed'
-                            : 'bg-green-600 hover:bg-green-700 text-white hover:shadow-md'
-                        }`}
-                      >
-                        {appliedIds.has(opp._id) ? 'Applied' : 'Apply Now'}
-                      </button>
-                    )}
-
-                    {isOwner(opp) && (
-                      <div className="flex gap-5 text-sm font-medium">
-                        <Link
-                          to={`/dashboard/opportunities/edit/${opp._id}`}
-                          className="flex items-center gap-1.5 text-blue-600 hover:text-blue-800 transition-colors"
-                        >
-                          <Edit size={16} />
-                          Edit
-                        </Link>
-
-                        <Link
-                          to={`/dashboard/opportunity-applications/${opp._id}`}
-                          className="flex items-center gap-1.5 text-green-600 hover:text-green-800 transition-colors"
-                        >
-                          Applications ({opp.applicationsCount || 0})
-                        </Link>
-                      </div>
-                    )}
-                  </div>
                 </div>
               </div>
             ))}
@@ -462,18 +444,18 @@ export default function Opportunities() {
                 </div>
               </div>
 
-              {user?.role === 'volunteer' && (
+              {user?.role !== 'ngo' && (
                 <div className="pt-8 border-t flex justify-end">
                   <button
                     onClick={() => { handleApply(selectedOpp._id); closeView(); }}
-                    disabled={appliedIds.has(selectedOpp._id)}
+                    disabled={user?.role === 'volunteer' && appliedIds.has(selectedOpp._id)}
                     className={`px-10 py-4 rounded-xl font-bold text-lg shadow-lg transition-all ${
-                      appliedIds.has(selectedOpp._id)
+                      user?.role === 'volunteer' && appliedIds.has(selectedOpp._id)
                         ? 'bg-gray-300 text-gray-700 cursor-not-allowed'
                         : 'bg-green-600 hover:bg-green-700 text-white hover:shadow-xl'
                     }`}
                   >
-                    {appliedIds.has(selectedOpp._id) ? 'Already Applied' : 'Apply Now'}
+                    {user?.role === 'volunteer' && appliedIds.has(selectedOpp._id) ? 'Already Applied' : 'Apply Now'}
                   </button>
                 </div>
               )}

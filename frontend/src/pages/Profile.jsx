@@ -23,6 +23,8 @@ export default function Profile() {
     name: '',
     email: '',
     address: '',
+    location: '',
+    skills: '',
     currentPassword: '',
     newPassword: '',
     confirmPassword: '',
@@ -42,6 +44,8 @@ export default function Profile() {
       name: user.name || '',
       email: user.email || '',
       address: user.address || '',
+      location: user.location || '',
+      skills: Array.isArray(user.skills) ? user.skills.join(', ') : (user.skills || ''),
       currentPassword: '',
       newPassword: '',
       confirmPassword: '',
@@ -110,6 +114,14 @@ export default function Profile() {
       if (formData.name.trim()) payload.append('name', formData.name.trim());
       if (formData.email.trim()) payload.append('email', formData.email.trim());
       if (formData.address?.trim()) payload.append('address', formData.address.trim());
+      if (formData.location?.trim()) payload.append('location', formData.location.trim());
+      if (formData.skills?.trim()) {
+        formData.skills
+          .split(',')
+          .map(s => s.trim())
+          .filter(Boolean)
+          .forEach(skill => payload.append('skills', skill));
+      }
 
       if (formData.newPassword && formData.currentPassword) {
         payload.append('currentPassword', formData.currentPassword);
@@ -187,10 +199,15 @@ export default function Profile() {
                   {formData.name || user?.name || 'Your Profile'}
                 </h1>
                 <p className="mt-2 text-green-100/90 text-lg">{formData.email || user?.email}</p>
-                {user?.address && (
+                {user?.location && (
                   <p className="mt-1 text-green-100/80 flex items-center justify-center sm:justify-start gap-2">
                     <MapPin size={18} />
-                    {user.address}
+                    {user.location}
+                  </p>
+                )}
+                {user?.skills && user.skills.length > 0 && (
+                  <p className="mt-1 text-green-100/80 text-sm">
+                    Skills: {user.skills.join(', ')}
                   </p>
                 )}
               </div>
@@ -234,6 +251,36 @@ export default function Profile() {
                     disabled={isSubmitting}
                     className="w-full px-5 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all shadow-sm"
                   />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                    <MapPin size={18} className="text-green-600" />
+                    Location
+                  </label>
+                  <input
+                    name="location"
+                    value={formData.location}
+                    onChange={handleInputChange}
+                    placeholder="e.g. Nagpur, Maharashtra"
+                    disabled={isSubmitting}
+                    className="w-full px-5 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all shadow-sm"
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Skills / Waste Types
+                  </label>
+                  <input
+                    name="skills"
+                    value={formData.skills}
+                    onChange={handleInputChange}
+                    placeholder="e.g. pickup, sorting, composting"
+                    disabled={isSubmitting}
+                    className="w-full px-5 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all shadow-sm"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">Comma-separated list</p>
                 </div>
 
                 <div className="md:col-span-2">

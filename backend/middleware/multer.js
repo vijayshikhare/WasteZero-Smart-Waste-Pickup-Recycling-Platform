@@ -1,11 +1,13 @@
-// middleware/multer.js
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
-// Ensure upload directory exists
-const uploadDir = path.join(__dirname, '..', 'public', 'uploads', 'opportunities');
+// ────────────────────────────────────────────────
+// Upload directory - flat folder (recommended)
+// ────────────────────────────────────────────────
+const uploadDir = path.join(__dirname, '..', 'public', 'uploads');
 
+// Create directory if it doesn't exist
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
   console.log(`Created upload directory: ${uploadDir}`);
@@ -19,15 +21,16 @@ const storage = multer.diskStorage({
     cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
-    // Generate unique filename: opp-YYYYMMDD-HHMMSS-random.ext
+    // Unique filename: opp-TIMESTAMP-RANDOM.ext
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
     const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `opp-${uniqueSuffix}${ext}`);
+    const filename = `opp-${uniqueSuffix}${ext}`;
+    cb(null, filename);
   },
 });
 
 // ────────────────────────────────────────────────
-// File filter - only allow images
+// File filter - only images
 // ────────────────────────────────────────────────
 const fileFilter = (req, file, cb) => {
   const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
@@ -35,16 +38,14 @@ const fileFilter = (req, file, cb) => {
   if (allowedTypes.includes(file.mimetype)) {
     cb(null, true);
   } else {
-    const error = new Error(
-      'Invalid file type. Only JPEG, JPG, PNG, and WebP images are allowed.'
-    );
+    const error = new Error('Only JPEG, JPG, PNG, and WebP images are allowed.');
     error.code = 'LIMIT_FILE_TYPE';
     cb(error, false);
   }
 };
 
 // ────────────────────────────────────────────────
-// Multer instance for opportunity images
+// Multer instance
 // ────────────────────────────────────────────────
 const upload = multer({
   storage,
@@ -54,4 +55,6 @@ const upload = multer({
   fileFilter,
 });
 
+// Optional: export a single-file uploader for opportunities
+// (you can also keep using upload.single('image') in routes)
 module.exports = upload;

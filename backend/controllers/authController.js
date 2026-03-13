@@ -64,7 +64,7 @@ const isDisposableOrSpamEmail = async (email) => {
     return { valid: false, message: 'This email appears to be a test or spam account' };
   }
 
-  if (SPAM_PREFIXES.includes(username)) {
+  if (SPAM_PREFIXES.includes(username.toLowerCase())) {
     return { valid: false, message: 'Generic or suspicious email prefix detected' };
   }
 
@@ -123,7 +123,7 @@ const sendVerificationEmail = async (to, otp) => {
 
 const register = async (req, res) => {
   try {
-    const { name, email, password, role } = req.body;
+    const { name, email, password, role, ngoCertificationCode, adminSecretKey } = req.body;
 
     if (!name?.trim() || !email?.trim() || !password?.trim()) {
       return res.status(400).json({ message: 'Name, email and password are required' });
@@ -143,13 +143,34 @@ const register = async (req, res) => {
       return res.status(400).json({ message: 'Password must be at least 6 characters long' });
     }
 
+    // ===== Validate Authorization Codes =====
+    let finalRole = role && ['volunteer', 'ngo', 'admin'].includes(role) ? role : 'volunteer';
+
+    if (finalRole === 'ngo') {
+      if (!ngoCertificationCode?.trim()) {
+        return res.status(400).json({ message: 'NGO Certification Code is required' });
+      }
+      if (ngoCertificationCode.trim() !== process.env.NGO_CERTIFICATION_CODE) {
+        return res.status(403).json({ message: 'Invalid NGO Certification Code. Please contact WasteZero admin.' });
+      }
+    }
+
+    if (finalRole === 'admin') {
+      if (!adminSecretKey?.trim()) {
+        return res.status(400).json({ message: 'Admin Master Key is required' });
+      }
+      if (adminSecretKey.trim() !== process.env.ADMIN_SECRET_KEY) {
+        return res.status(403).json({ message: 'Invalid Admin Master Key. Access denied.' });
+      }
+    }
+
     const hashed = await bcrypt.hash(password, 10);
 
     const user = await User.create({
       name: name.trim(),
       email: normalizedEmail,
       password: hashed,
-      role: ['volunteer', 'ngo', 'admin'].includes(role) ? role : 'volunteer',
+      role: finalRole,
     });
 
     const token = jwt.sign(
@@ -158,11 +179,14 @@ const register = async (req, res) => {
       { expiresIn: '30m' }
     );
 
+    const isProd = process.env.NODE_ENV === 'production';
+
     res.cookie('accessToken', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
-      maxAge: 30 * 60 * 1000,
+      secure: isProd,                     // false in dev (http), true in prod (https)
+      sameSite: isProd ? 'none' : 'lax',  // 'none' only works with secure:true
+      maxAge: 30 * 60 * 1000,             // 30 minutes
+      path: '/',
     });
 
     return res.status(201).json({
@@ -170,10 +194,16 @@ const register = async (req, res) => {
       name: user.name,
       email: user.email,
       role: user.role,
+      token,
     });
   } catch (err) {
-    console.error('[REGISTER]', err.message);
-    res.status(500).json({ message: 'Registration failed' });
+    console.error('[REGISTER ERROR]', err);
+    const payload = { message: 'Registration failed. Please try again.' };
+    if (process.env.NODE_ENV !== 'production') {
+      payload.error = err.message;
+      payload.stack = err.stack && err.stack.substring(0, 1000);
+    }
+    res.status(500).json(payload);
   }
 };
 
@@ -187,8 +217,16 @@ const login = async (req, res) => {
     const normalized = email.toLowerCase().trim();
     const user = await User.findOne({ email: normalized }).select('+password');
 
-    if (!user || !user.password) {
+    // Helpful debug for development
+    console.log(`[LOGIN ATTEMPT] email=${normalized} found=${!!user} hasPassword=${!!user?.password}`);
+
+    if (!user) {
       return res.status(401).json({ message: 'Invalid credentials' });
+    }
+
+    // If the user exists but has no password (created via OTP flow), guide them to use OTP or set a password
+    if (!user.password) {
+      return res.status(400).json({ message: 'This account does not have a password. Please use the OTP login or set a password via the "Forgot password" / profile flow.' });
     }
 
     const match = await bcrypt.compare(password, user.password);
@@ -202,11 +240,14 @@ const login = async (req, res) => {
       { expiresIn: '30m' }
     );
 
+    const isProd = process.env.NODE_ENV === 'production';
+
     res.cookie('accessToken', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+      secure: isProd,
+      sameSite: isProd ? 'none' : 'lax',
       maxAge: 30 * 60 * 1000,
+      path: '/',
     });
 
     return res.json({
@@ -214,10 +255,11 @@ const login = async (req, res) => {
       name: user.name,
       email: user.email,
       role: user.role,
+      token,
     });
   } catch (err) {
-    console.error('[LOGIN]', err.message);
-    res.status(500).json({ message: 'Login failed' });
+    console.error('[LOGIN ERROR]', err);
+    res.status(500).json({ message: 'Login failed. Please try again.' });
   }
 };
 
@@ -236,7 +278,7 @@ const setPassword = async (req, res) => {
 
     res.json({ message: 'Password updated successfully' });
   } catch (err) {
-    console.error('[SET PASSWORD]', err.message);
+    console.error('[SET PASSWORD ERROR]', err);
     res.status(500).json({ message: 'Failed to update password' });
   }
 };
@@ -256,6 +298,7 @@ const sendOtp = async (req, res) => {
     const normalized = email.toLowerCase().trim();
     const otp = generateOTP();
 
+    // Clean old OTPs
     await Otp.deleteMany({ email: normalized });
 
     await Otp.create({
@@ -268,14 +311,14 @@ const sendOtp = async (req, res) => {
 
     res.json({ message: 'OTP sent to your email' });
   } catch (err) {
-    console.error('[SEND OTP]', err.message);
+    console.error('[SEND OTP ERROR]', err);
     res.status(500).json({ message: 'Failed to send OTP' });
   }
 };
 
 const verifyOtp = async (req, res) => {
   try {
-    let { email, otp } = req.body;
+    let { email, otp, role, ngoCertificationCode, adminSecretKey } = req.body;
     if (!email?.trim() || !otp?.trim()) {
       return res.status(400).json({ message: 'Email and OTP required' });
     }
@@ -303,10 +346,31 @@ const verifyOtp = async (req, res) => {
     let isNewUser = false;
 
     if (!user) {
+      // ===== Validate Authorization Codes for New User =====
+      let finalRole = role && ['volunteer', 'ngo', 'admin'].includes(role) ? role : 'volunteer';
+
+      if (finalRole === 'ngo') {
+        if (!ngoCertificationCode?.trim()) {
+          return res.status(400).json({ message: 'NGO Certification Code is required' });
+        }
+        if (ngoCertificationCode.trim() !== process.env.NGO_CERTIFICATION_CODE) {
+          return res.status(403).json({ message: 'Invalid NGO Certification Code. Please contact WasteZero admin.' });
+        }
+      }
+
+      if (finalRole === 'admin') {
+        if (!adminSecretKey?.trim()) {
+          return res.status(400).json({ message: 'Admin Master Key is required' });
+        }
+        if (adminSecretKey.trim() !== process.env.ADMIN_SECRET_KEY) {
+          return res.status(403).json({ message: 'Invalid Admin Master Key. Access denied.' });
+        }
+      }
+
       user = await User.create({
         email,
         name: email.split('@')[0].trim() || 'User',
-        role: 'volunteer',
+        role: finalRole,
       });
       isNewUser = true;
     }
@@ -317,11 +381,14 @@ const verifyOtp = async (req, res) => {
       { expiresIn: '30m' }
     );
 
+    const isProd = process.env.NODE_ENV === 'production';
+
     res.cookie('accessToken', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+      secure: isProd,
+      sameSite: isProd ? 'none' : 'lax',
       maxAge: 30 * 60 * 1000,
+      path: '/',
     });
 
     res.json({
@@ -331,15 +398,26 @@ const verifyOtp = async (req, res) => {
       role: user.role,
       isNewUser,
       message: isNewUser ? 'Account created and logged in' : 'Logged in successfully',
+      token,
     });
   } catch (err) {
-    console.error('[VERIFY OTP]', err.message);
-    res.status(500).json({ message: 'Authentication failed' });
+    console.error('[VERIFY OTP ERROR]', err);
+    const payload = { message: 'Authentication failed' };
+    if (process.env.NODE_ENV !== 'production') {
+      payload.error = err.message;
+      payload.stack = err.stack && err.stack.substring(0, 1000);
+    }
+    res.status(500).json(payload);
   }
 };
 
 const logout = (req, res) => {
-  res.clearCookie('accessToken');
+  res.clearCookie('accessToken', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+    path: '/',
+  });
   res.json({ message: 'Logged out successfully' });
 };
 
@@ -355,7 +433,7 @@ const getProfile = async (req, res) => {
 
     res.json(user);
   } catch (err) {
-    console.error('[GET PROFILE]', err.message);
+    console.error('[GET PROFILE ERROR]', err);
     res.status(500).json({ message: 'Failed to fetch profile' });
   }
 };
@@ -378,7 +456,7 @@ const updateProfile = async (req, res) => {
       newPassword,
     } = req.body;
 
-    // ── Text field updates ───────────────────────────────
+    // Text fields
     if (name?.trim()) user.name = name.trim();
 
     if (email?.trim()) {
@@ -402,7 +480,7 @@ const updateProfile = async (req, res) => {
       user.skills = skills.map(s => s.trim()).filter(Boolean);
     }
 
-    // ── Password change ──────────────────────────────────
+    // Password change
     if (newPassword && currentPassword) {
       if (newPassword.length < 6) {
         return res.status(400).json({ message: 'New password must be at least 6 characters' });
@@ -418,9 +496,8 @@ const updateProfile = async (req, res) => {
       user.password = await bcrypt.hash(newPassword, 10);
     }
 
-    // ── Profile picture ──────────────────────────────────
+    // Profile picture
     if (req.file) {
-      // Delete old photo if exists
       if (user.profilePicture) {
         const oldPath = path.join(__dirname, '..', 'public', user.profilePicture);
         try {
@@ -432,13 +509,11 @@ const updateProfile = async (req, res) => {
         }
       }
 
-      // Save new path (multer already saved file)
       user.profilePicture = `/uploads/${req.file.filename}`;
     }
 
     await user.save();
 
-    // Return clean updated user
     const updated = await User.findById(user._id).select(
       '-password -__v -createdAt -updatedAt'
     );
@@ -448,7 +523,7 @@ const updateProfile = async (req, res) => {
       user: updated,
     });
   } catch (err) {
-    console.error('[UPDATE PROFILE]', err.message);
+    console.error('[UPDATE PROFILE ERROR]', err);
     res.status(500).json({ message: 'Failed to update profile' });
   }
 };

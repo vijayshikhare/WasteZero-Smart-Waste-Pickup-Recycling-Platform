@@ -1,4 +1,3 @@
-// models/Application.js
 const mongoose = require('mongoose');
 
 const applicationSchema = new mongoose.Schema(
@@ -21,7 +20,15 @@ const applicationSchema = new mongoose.Schema(
       type: String,
       enum: ['pending', 'accepted', 'rejected'],
       default: 'pending',
-      index: true,
+      index: true, // fast filter by status
+    },
+
+    message: {
+      type: String,
+      trim: true,
+      maxlength: [1000, 'Message cannot exceed 1000 characters'],
+      default: null,
+      // Volunteer can write a short motivation or availability note
     },
 
     appliedAt: {
@@ -35,10 +42,10 @@ const applicationSchema = new mongoose.Schema(
     },
 
     // Optional: note from NGO when accepting/rejecting
-    note: {
+    reviewNote: {
       type: String,
       trim: true,
-      maxlength: 500,
+      maxlength: [500, 'Review note cannot exceed 500 characters'],
       default: null,
     },
   },
@@ -54,24 +61,23 @@ const applicationSchema = new mongoose.Schema(
 // ────────────────────────────────────────────────
 applicationSchema.index(
   { opportunity_id: 1, volunteer_id: 1 },
-  { unique: true }
+  { unique: true, message: 'You have already applied to this opportunity' }
 );
 
 // ────────────────────────────────────────────────
-// Pre-save hook — NO 'next()' — use async/await style
+// Pre-save hook (modern async/await style - no next())
 // ────────────────────────────────────────────────
 applicationSchema.pre('save', async function () {
-  // Only set reviewedAt when status changes from pending to accepted/rejected
+  // Automatically set reviewedAt when status changes from pending
   if (this.isModified('status') && this.status !== 'pending' && !this.reviewedAt) {
     this.reviewedAt = new Date();
   }
 
-  // Optional: add more pre-save logic here (e.g. validation, auto-fill)
-  // No 'next()' call needed!
+  // Optional: add more logic here (e.g. validate message length, etc.)
 });
 
 // ────────────────────────────────────────────────
-// Instance methods (helpers)
+// Instance methods (useful helpers)
 // ────────────────────────────────────────────────
 applicationSchema.methods.isPending = function () {
   return this.status === 'pending';
@@ -88,5 +94,19 @@ applicationSchema.methods.isRejected = function () {
 applicationSchema.methods.canBeReviewed = function () {
   return this.status === 'pending' && !this.reviewedAt;
 };
+
+applicationSchema.methods.isReviewed = function () {
+  return !!this.reviewedAt;
+};
+
+// ────────────────────────────────────────────────
+// Virtuals (optional - add if needed)
+// ────────────────────────────────────────────────
+// applicationSchema.virtual('volunteer', {
+//   ref: 'User',
+//   localField: 'volunteer_id',
+//   foreignField: '_id',
+//   justOne: true,
+// });
 
 module.exports = mongoose.model('Application', applicationSchema);

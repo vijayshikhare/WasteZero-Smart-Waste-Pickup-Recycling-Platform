@@ -1,8 +1,10 @@
 // routes/applicationRoutes.js
 const express = require('express');
+const mongoose = require('mongoose'); // Required for ObjectId validation
+
 const router = express.Router();
 
-// Middleware (NO MULTER IMPORT HERE!)
+// Middleware
 const { protect, ngoOnly, volunteerOrHigher } = require('../middleware/authMiddleware');
 
 // Controllers
@@ -13,44 +15,47 @@ const {
   updateApplicationStatus,
 } = require('../controllers/applicationController');
 
-// ────────────────────────────────────────────────
-// VOLUNTEER ROUTES (no file upload)
-// ────────────────────────────────────────────────
+// Safety check: crash early if critical handlers missing
+if (!getMyApplications || !applyToOpportunity) {
+  console.error('[APPLICATION ROUTES FATAL] Missing required controller methods');
+  process.exit(1);
+}
 
-// GET my applications
+/**
+ * VOLUNTEER ROUTES (no file upload)
+ */
 router.get('/my', protect, volunteerOrHigher, getMyApplications);
 
-// POST apply to opportunity (JSON only — NO MULTER!)
 router.post('/:opportunityId/apply', protect, volunteerOrHigher, applyToOpportunity);
 
-// ────────────────────────────────────────────────
-// NGO ROUTES (no file upload)
-// ────────────────────────────────────────────────
-
-// GET applications for one opportunity
+/**
+ * NGO ROUTES (no file upload)
+ */
 router.get('/opportunity/:opportunityId', protect, ngoOnly, getOpportunityApplications);
 
-// PATCH update application status
 router.patch('/:applicationId/status', protect, ngoOnly, updateApplicationStatus);
 
-// ────────────────────────────────────────────────
-// Validate MongoDB ObjectId params
-// ────────────────────────────────────────────────
+/**
+ * Parameter validation for MongoDB ObjectIds
+ * Called separately for each param name
+ */
 router.param('opportunityId', (req, res, next, id) => {
-  if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+  if (!mongoose.Types.ObjectId.isValid(id)) {
     return res.status(400).json({
       success: false,
-      message: 'Invalid opportunity ID format (24-character hex)',
+      message: 'Invalid opportunityId format — must be a valid MongoDB ObjectId (24 hex chars)',
+      errorCode: 'INVALID_ID',
     });
   }
   next();
 });
 
 router.param('applicationId', (req, res, next, id) => {
-  if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+  if (!mongoose.Types.ObjectId.isValid(id)) {
     return res.status(400).json({
       success: false,
-      message: 'Invalid application ID format (24-character hex)',
+      message: 'Invalid applicationId format — must be a valid MongoDB ObjectId (24 hex chars)',
+      errorCode: 'INVALID_ID',
     });
   }
   next();

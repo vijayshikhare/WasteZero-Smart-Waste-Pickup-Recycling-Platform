@@ -1,218 +1,341 @@
 
+
 # WasteZero ♻️
 
-**Cleaner India • Smarter Tomorrow**
+<p align="center">
+  <img src="https://img.shields.io/badge/Live%20Demo-WasteZero-00C7B7?logo=vercel&logoColor=white&style=for-the-badge" />
+  <img src="https://img.shields.io/github/stars/vijayshikhare/WasteZero?style=for-the-badge" />
+  <img src="https://img.shields.io/github/forks/vijayshikhare/WasteZero?style=for-the-badge" />
+  <img src="https://img.shields.io/github/followers/vijayshikhare?style=for-the-badge&label=Follow" />
+  <img src="https://img.shields.io/github/issues/vijayshikhare/WasteZero?style=for-the-badge" />
+  <img src="https://img.shields.io/github/last-commit/vijayshikhare/WasteZero?style=for-the-badge" />
+  <img src="https://img.shields.io/github/languages/top/vijayshikhare/WasteZero?style=for-the-badge" />
+  <img src="https://img.shields.io/github/license/vijayshikhare/WasteZero?style=for-the-badge" />
+</p>
 
-WasteZero is a **community-driven waste management platform** that connects **NGOs**, **volunteers**, and **citizens** in Jalgaon (and scalable to other cities) for efficient waste collection, volunteer coordination, and opportunity management.
+<p align="center">
+  <img src="https://img.shields.io/badge/Made%20with-React-61DAFB?logo=react&logoColor=white&style=flat-square" />
+  <img src="https://img.shields.io/badge/Node.js-Backend-339933?logo=node.js&logoColor=white&style=flat-square" />
+  <img src="https://img.shields.io/badge/Express.js-Backend-000000?logo=express&logoColor=white&style=flat-square" />
+  <img src="https://img.shields.io/badge/MongoDB-Database-47A248?logo=mongodb&logoColor=white&style=flat-square" />
+  <img src="https://img.shields.io/badge/Tailwind-CSS-38B2AC?logo=tailwindcss&logoColor=white&style=flat-square" />
+  <img src="https://img.shields.io/badge/Socket.io-Realtime-010101?logo=socket.io&logoColor=white&style=flat-square" />
+</p>
 
-The platform enables NGOs to post pickup requests / volunteer opportunities, volunteers to apply and contribute, and admins to monitor overall activity.
-
-Live Demo (if deployed): [https://wastezero.vercel.app](https://wastezero.vercel.app)  
-Backend API: [https://wastezero-backend.onrender.com](https://wastezero-backend.onrender.com) (or your hosted URL)
-
-## Features
-
-### For Volunteers
-- Browse and apply to volunteer opportunities posted by NGOs
-- Track application status (Pending / Accepted / Rejected)
-- View applied opportunities in "My Applications"
-- Simple password + OTP login
-
-### For NGOs
-- Post new volunteer opportunities with title, description, image, skills, duration, location
-- View all applications received for each opportunity
-- Accept or reject applications with optional note
-- Manage posted opportunities
-
-### For Admins (future scope)
-- Overview dashboard
-- Manage users (volunteers, NGOs)
-- Monitor platform activity & reports
-
-### Core Platform Features
-- Role-based access (Volunteer, NGO, Admin)
-- Secure authentication (JWT + httpOnly cookies + OTP option)
-- File uploads (opportunity images)
-- Responsive Tailwind CSS UI
-- Real-time toast notifications (react-hot-toast)
-- Protected routes with role checks
-
-## Tech Stack
-
-**Frontend**
-- React 18 + Vite
-- React Router v6
-- Tailwind CSS + lucide-react icons
-- Axios (API client)
-- Context API (auth state)
-- react-hot-toast (notifications)
-
-**Backend**
-- Node.js + Express
-- MongoDB (Mongoose ODM)
-- JWT Authentication + httpOnly cookies
-- Multer (file uploads)
-- Bcrypt (password hashing)
-- Nodemailer / custom OTP system
-
-**Deployment Ready**
-- Vite for fast dev & build
-- Vercel / Netlify (frontend)
-- Render / Railway / Cyclic (backend)
-
-## Project Structure
-
-```
-wastezero/
-├── backend/
-│   ├── controllers/          → auth, opportunity, application
-│   ├── middleware/           → auth, role checks
-│   ├── models/               → User, Opportunity, Application
-│   ├── routes/               → auth, opportunities, applications
-│   ├── uploads/              → stored images
-│   ├── server.js
-│   └── ...
-├── frontend/                 (or src/ in monorepo)
-│   ├── src/
-│   │   ├── components/       → Header, Sidebar, reusable UI
-│   │   ├── contexts/         → AuthContext
-│   │   ├── pages/            → Dashboard, Login, Opportunities, MyApplications, ...
-│   │   ├── App.jsx
-│   │   ├── main.jsx
-│   │   └── ...
-│   ├── public/
-│   ├── tailwind.config.js
-│   └── vite.config.js
-└── README.md
-```
-
-## Getting Started
-
-### Prerequisites
-
-- Node.js ≥ 18
-- MongoDB (local or Atlas)
-- npm / yarn / pnpm
-
-### Backend Setup
-
-```bash
-cd backend
-cp .env.example .env
-```
-
-Fill `.env`:
-
-```env
-PORT=5000
-MONGO_URI=mongodb://localhost:27017/wastezero
-JWT_SECRET=your-very-long-secret-key
-NODE_ENV=development
-```
-
-Install & run:
-
-```bash
-npm install
-npm start
-# or
-npm run dev   # with nodemon
-```
-
-API will run at: http://localhost:5000
-
-### Frontend Setup
-
-```bash
-cd frontend   # or root if monorepo
-cp .env.example .env
-```
-
-Fill `.env`:
-
-```env
-VITE_API_URL=http://localhost:5000
-```
-
-Install & run:
-
-```bash
-npm install
-npm run dev
-```
-
-Frontend runs at: http://localhost:5173
-
-### Default Test Users (after seeding or manual registration)
-
-- Volunteer: `vijay@example.com` / password: `123456`
-- NGO: `ngo.jalgaon@example.com` / password: `ngo123`
-- Admin: (future)
-
-## API Endpoints (Summary)
-
-### Auth
-- `POST /api/auth/register` – Register user
-- `POST /api/auth/login` – Login with password
-- `POST /api/auth/send-otp` – Send OTP
-- `POST /api/auth/verify-otp` – Verify OTP & login
-- `GET /api/auth/profile` – Get current user
-- `POST /api/auth/logout` – Logout
-
-### Opportunities (NGO)
-- `POST /api/opportunities` – Create opportunity (multipart)
-- `GET /api/opportunities` – List all open opportunities
-- `GET /api/opportunities/my-posted` – NGO's own posted (future)
-
-### Applications
-- `POST /api/applications/:opportunityId/apply` – Volunteer apply
-- `GET /api/applications/my` – Volunteer's applications
-- `GET /api/applications/opportunity/:opportunityId` – NGO view apps for one opp
-- `PATCH /api/applications/:applicationId/status` – NGO accept/reject
-
-## Deployment
-
-### Frontend (Vercel / Netlify)
-
-1. Push to GitHub
-2. Connect repository to Vercel
-3. Set environment variable: `VITE_API_URL=https://your-backend.com`
-4. Deploy
-
-### Backend (Render / Railway)
-
-1. Create new Web Service
-2. Connect GitHub repo / backend folder
-3. Set environment variables (MONGO_URI, JWT_SECRET, etc.)
-4. Build command: `npm install`
-5. Start command: `node server.js`
-6. Add disk for `/uploads` if needed
-
-## Future Enhancements (Roadmap)
-
-- Real-time notifications (Socket.io / Pusher)
-- Email alerts on application status change
-- Admin dashboard + user management
-- Waste pickup requests (separate from volunteer opps)
-- Mobile responsive improvements
-- Map integration for locations (Google Maps / Leaflet)
-
-## Contributing
-
-Feel free to open issues or PRs!
-
-1. Fork the repo
-2. Create feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push (`git push origin feature/amazing-feature`)
-5. Open Pull Request
-
-## License
-
-MIT License
+<p align="center">
+  <b>Smart Waste Management Platform for Jalgaon, India</b><br>
+  <i>Recycle karo, rewards pao, aur city ko saaf rakho!</i>
+</p>
 
 ---
 
-**Built with ❤️ in Jalgaon for a cleaner & greener India**  
-**WasteZero – Cleaner India • Smarter Tomorrow** ♻️
+## 📢 About WasteZero
+
+WasteZero is a modern, full-stack, open-source platform designed to revolutionize waste management and recycling in Indian cities, starting with Jalgaon. It empowers citizens, NGOs, agents, and administrators to collaborate for a cleaner, greener future.
+
+### Why WasteZero?
+- **Urban waste is a growing challenge.** WasteZero brings technology, transparency, and community together to solve it.
+- **All-in-one platform:** From pickup scheduling to real-time chat, analytics, and rewards, everything is integrated.
+- **Open for all:** Anyone can contribute, fork, or deploy their own version for their city.
+
+---
+
+## 🌟 Key Highlights
+
+- **Dynamic, role-based dashboards** for Admin, NGO, Agent, and User
+- **Real-time chat** (Socket.io) for instant communication
+- **Opportunity matching** for volunteers and NGOs
+- **Pickup scheduling** and tracking with notifications
+- **Rewards system** to gamify recycling
+- **Mobile-first, responsive UI** (Tailwind CSS)
+- **Secure authentication** (JWT, role-based)
+- **Admin analytics** and reporting
+- **Production-ready**: Security, .gitignore, and best practices baked in
+
+---
+
+## 🌐 Live Project
+
+👉 [waste0.vercel.app](https://waste0.vercel.app)
+
+---
+
+## 📊 GitHub Stats
+
+<p align="center">
+  <img src="https://github-readme-stats.vercel.app/api/pin/?username=vijayshikhare&repo=WasteZero&theme=react&show_owner=true" />
+  <img src="https://github-readme-stats.vercel.app/api/top-langs/?username=vijayshikhare&layout=compact&theme=react" />
+</p>
+
+---
+
+## 🏗️ Tech Stack
+
+- **Frontend:** React, Vite, Tailwind CSS
+- **Backend:** Node.js, Express, MongoDB
+- **Realtime:** Socket.io
+- **Deployment:** Vercel (Frontend), Any Node Host (Backend)
+
+---
+
+## 📦 Local Setup
+
+```sh
+# 1. Clone the repository
+git clone https://github.com/vijayshikhare/WasteZero.git
+cd WasteZero
+
+# 2. Install dependencies
+cd backend && npm install
+cd ../frontend && npm install
+
+# 3. Environment Variables
+# Copy `.env.example` to `.env` in both backend/ and frontend/ and fill in your secrets
+
+# 4. Run locally
+# Backend:
+cd backend && npm start
+# Frontend:
+cd ../frontend && npm run dev
 ```
+
+---
+
+## 🖥️ Project Architecture
+
+```
+WasteZero/
+├── backend/
+│   ├── controllers/
+│   ├── models/
+│   ├── routes/
+│   ├── middleware/
+│   ├── public/
+│   └── server.js
+├── frontend/
+│   ├── src/
+│   │   ├── components/
+│   │   ├── pages/
+│   │   ├── layouts/
+│   │   ├── contexts/
+│   │   └── utils/
+│   ├── public/
+│   └── index.html
+├── .env.example
+├── .gitignore
+└── README.md
+```
+
+---
+
+## 🛡️ Security & Best Practices
+- All secrets managed via `.env` (never committed)
+- Input validation and sanitization on all forms
+- File uploads restricted to safe types
+- Rate limiting and CORS enabled
+- Production-ready `.gitignore` included
+- Follows OWASP Top 10 guidelines
+
+---
+
+## 📱 Mobile Friendly
+- 100% responsive design
+- Sidebar and dashboard adapt to all screen sizes
+- Touch-friendly controls and fast loading
+
+---
+
+## 🚀 Usage
+
+1. Register as a user, NGO, or agent
+2. Explore dashboard features based on your role
+3. Schedule pickups, chat, and earn rewards
+4. Admins can view analytics and manage the system
+
+---
+
+## 🧑‍💻 For Developers
+
+- Modular codebase, easy to extend
+- Clear separation of frontend and backend
+- RESTful API design
+- Realtime events via Socket.io
+- Custom hooks and context for state management
+
+---
+
+## 🤝 Contributing
+
+> Contributions, stars, and forks are welcome!
+
+1. Fork the repo
+2. Create your feature branch (`git checkout -b feature/YourFeature`)
+3. Commit your changes (`git commit -m 'Add some feature'`)
+4. Push to the branch (`git push origin feature/YourFeature`)
+5. Open a Pull Request
+
+---
+
+## ⭐ Show Your Support
+
+- Give a ⭐️ if you like this project!
+- Follow [@vijayshikhare](https://github.com/vijayshikhare) for updates
+- Share with your network to help us grow
+- Add your city as a fork and contribute back!
+
+---
+
+## 📣 Community & Discussions
+
+- [Discussions](https://github.com/vijayshikhare/WasteZero/discussions)
+- [Issues](https://github.com/vijayshikhare/WasteZero/issues)
+- [Pull Requests](https://github.com/vijayshikhare/WasteZero/pulls)
+
+---
+
+## 📚 FAQ
+
+**Q: Can I use this for my city?**
+A: Yes! Fork, customize, and deploy for your city. Contributions welcome.
+
+**Q: Is it free?**
+A: 100% open source under MIT license.
+
+**Q: How do I get support?**
+A: Open an issue or join the discussions tab.
+
+**Q: How can I contribute?**
+A: Fork, create a feature branch, and open a PR. See Contributing section above.
+
+---
+
+## 📄 License
+MIT
+
+---
+
+## 🙋‍♂️ Contact & Social
+
+- Email: vijayshikhareteam@gmail.com
+- Mobile: +91 9422737898
+- [Instagram](https://instagram.com/shikharecoder) | [Twitter](https://twitter.com/vijayshikhre) | [LinkedIn](https://linkedin.com/in/vijayshikhare) | [GitHub](https://github.com/vijayshikhare)
+
+---
+
+<p align="center"><i>WasteZero: Recycle karo, rewards pao, aur city ko saaf rakho!</i></p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Made%20with-React-61DAFB?logo=react&logoColor=white&style=flat-square" />
+  <img src="https://img.shields.io/badge/Node.js-Backend-339933?logo=node.js&logoColor=white&style=flat-square" />
+  <img src="https://img.shields.io/badge/Express.js-Backend-000000?logo=express&logoColor=white&style=flat-square" />
+  <img src="https://img.shields.io/badge/MongoDB-Database-47A248?logo=mongodb&logoColor=white&style=flat-square" />
+  <img src="https://img.shields.io/badge/Tailwind-CSS-38B2AC?logo=tailwindcss&logoColor=white&style=flat-square" />
+</p>
+
+<p align="center">
+  <b>Smart Waste Management Platform for Jalgaon, India</b><br>
+  <i>Recycle karo, rewards pao, aur city ko saaf rakho!</i>
+</p>
+
+---
+
+## 🚀 Features
+
+- 🔑 <b>Role-based dashboards</b> for Admin, NGO, Agent, and User
+- 💬 <b>Real-time chat</b> and notifications
+- 🤝 <b>Opportunity matching</b> for volunteers and NGOs
+- 🚚 <b>Pickup scheduling</b> and tracking
+- 🎁 <b>Rewards system</b> for recycling
+- 📱 <b>Mobile-friendly, responsive UI</b>
+- 🔒 <b>Secure authentication</b> (JWT, role-based access)
+- 📊 <b>Admin analytics</b> and reporting
+
+---
+
+## 🌐 Live Project
+
+👉 [waste0.vercel.app](https://waste0.vercel.app)
+
+---
+
+## 🏗️ Tech Stack
+
+- **Frontend:** React, Vite, Tailwind CSS
+- **Backend:** Node.js, Express, MongoDB
+- **Realtime:** Socket.io
+- **Deployment:** Vercel (Frontend), Any Node Host (Backend)
+
+---
+
+## 📦 Local Setup
+
+```sh
+# 1. Clone the repository
+git clone https://github.com/vijayshikhare/WasteZero.git
+cd WasteZero
+
+# 2. Install dependencies
+cd backend && npm install
+cd ../frontend && npm install
+
+# 3. Environment Variables
+# Copy `.env.example` to `.env` in both backend/ and frontend/ and fill in your secrets
+
+# 4. Run locally
+# Backend:
+cd backend && npm start
+# Frontend:
+cd ../frontend && npm run dev
+```
+
+---
+
+## 🛡️ Security & Best Practices
+- All secrets managed via `.env` (never committed)
+- Input validation and sanitization on all forms
+- File uploads restricted to safe types
+- Rate limiting and CORS enabled
+- Production-ready `.gitignore` included
+
+---
+
+## 📱 Mobile Friendly
+- 100% responsive design
+- Sidebar and dashboard adapt to all screen sizes
+
+---
+
+## 🤝 Contributing
+
+> Contributions, stars, and forks are welcome!
+
+1. Fork the repo
+2. Create your feature branch (`git checkout -b feature/YourFeature`)
+3. Commit your changes (`git commit -m 'Add some feature'`)
+4. Push to the branch (`git push origin feature/YourFeature`)
+5. Open a Pull Request
+
+---
+
+## ⭐ Show Your Support
+
+- Give a ⭐️ if you like this project!
+- Follow [@vijayshikhare](https://github.com/vijayshikhare) for updates
+- Share with your network to help us grow
+
+---
+
+## 📄 License
+MIT
+
+---
+
+## 🙋‍♂️ Contact & Social
+
+- Email: vijayshikhareteam@gmail.com
+- Mobile: +91 9422737898
+- [Instagram](https://instagram.com/shikharecoder) | [Twitter](https://twitter.com/vijayshikhre) | [LinkedIn](https://linkedin.com/in/vijayshikhare) | [GitHub](https://github.com/vijayshikhare)
+
+---
+
+<p align="center"><i>WasteZero: Recycle karo, rewards pao, aur city ko saaf rakho!</i></p>

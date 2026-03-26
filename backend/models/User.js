@@ -69,6 +69,19 @@ const userSchema = new mongoose.Schema(
       trim: true,
       maxlength: [1000, 'Bio cannot exceed 1000 characters'],
     },
+
+    isSuspended: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+
+    suspensionReason: {
+      type: String,
+      default: '',
+      trim: true,
+      maxlength: [1000, 'Suspension reason cannot exceed 1000 characters'],
+    },
   },
   {
     timestamps: true,

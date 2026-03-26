@@ -1,10 +1,16 @@
 const mongoose = require('mongoose');
 
 const pickupSchema = new mongoose.Schema({
-  ngo: {
+  // user who requested or owns the pickup (usually a volunteer)
+  user_id: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true,
+  },
+  // optional NGO assignment if needed in future
+  ngo: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
   },
   location: {
     type: String,

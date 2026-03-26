@@ -1,78 +1,65 @@
 // src/App.jsx
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { lazy, Suspense } from 'react';
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Navigate,
+} from 'react-router-dom';
+
+// Context & Toast
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Toaster } from 'react-hot-toast';
 
-// Global Header (visible on ALL pages)
-import Header from './components/Header/Header';
-
-// Pages
-import Home from './pages/Home';
-import Register from './pages/Register';
-import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
-import Profile from './pages/Profile';
-import Pickups from './pages/Pickups';
-import Volunteers from './pages/Volunteers';
-import NGOs from './pages/NGOs';
-import Reports from './pages/Reports';
-import Settings from './pages/Settings';
-import Opportunities from './pages/Opportunities';
-import MyApplications from './pages/MyApplications';
-import MyPosted from './pages/MyPosted';
-
-// NGO-specific opportunity management pages
-import EditOpportunity from './pages/EditOpportunity';              // ← new
-import OpportunityApplications from './pages/OpportunityApplications'; // ← new
-
 // Components
-import Sidebar from './components/Sidebar/Sidebar';
+import Header from './components/Header/Header.jsx';
+import Sidebar from './components/Sidebar/Sidebar.jsx';
+import Footer from './components/common/Footer.jsx';
 
-// Suppress React Router v7 future flag warnings in development (harmless)
-if (process.env.NODE_ENV === 'development') {
-  const originalWarn = console.warn;
-  console.warn = (...args) => {
-    if (typeof args[0] === 'string' && args[0].includes('React Router Future Flag Warning')) {
-      return;
-    }
-    originalWarn(...args);
-  };
-}
+// Public pages
+import Home from './pages/navbar/Home.jsx';
+import HowItWorks from './pages/navbar/HowItWorks.jsx';
+import CollectionPoints from './pages/navbar/CollectionPoints.jsx';
+import Rewards from './pages/navbar/Rewards.jsx';
+import About from './pages/navbar/About.jsx';
+import Contact from './pages/navbar/Contact.jsx';
 
-// Protected Route with optional role check
-function ProtectedRoute({ children, allowedRoles = [] }) {
-  const { user, loading } = useAuth();
+// Auth pages
+import Login from './pages/Login.jsx';
+import Register from './pages/Register.jsx';
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-green-600"></div>
-        <p className="ml-4 text-gray-600 font-medium">Loading...</p>
-      </div>
-    );
-  }
+// Lazy-loaded pages
+const Dashboard           = lazy(() => import('./pages/Dashboard.jsx'));
+const UserDashboard       = lazy(() => import('./pages/UserDashboard.jsx'));
+const Notifications       = lazy(() => import('./pages/Notifications.jsx'));
+const NgoDashboard        = lazy(() => import('./pages/NgoDashboard.jsx'));
+const AdminDashboard      = lazy(() => import('./pages/AdminDashboard.jsx'));
+const AdminUserManagement = lazy(() => import('./pages/AdminUserManagement.jsx'));
+const AdminReports        = lazy(() => import('./pages/AdminReports.jsx'));
+const AdminAnalytics      = lazy(() => import('./pages/AdminAnalytics.jsx'));
+const Profile             = lazy(() => import('./pages/Profile.jsx'));
+const Pickups             = lazy(() => import('./pages/Pickups.jsx'));
+const Volunteers          = lazy(() => import('./pages/Volunteers.jsx'));
+const NGOs                = lazy(() => import('./pages/NGOs.jsx'));
+const Reports             = lazy(() => import('./pages/Reports.jsx'));
+const Settings            = lazy(() => import('./pages/Settings.jsx'));
+const MyApplications      = lazy(() => import('./pages/MyApplications.jsx'));
+const MyPosted            = lazy(() => import('./pages/MyPosted.jsx'));
 
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
+// Opportunities
+const PublicOpportunities = lazy(() => import('./pages/opportunities/PublicOpportunities.jsx')); // ← new public list
+const CreateOpportunity   = lazy(() => import('./pages/opportunities/CreateOpportunity.jsx'));   // renamed from OpportunitiesList
+const EditOpportunity     = lazy(() => import('./pages/opportunities/EditOpportunity.jsx'));
+const OpportunityApplications = lazy(() => import('./pages/opportunities/OpportunityApplications.jsx'));
+const Chat = lazy(() => import('./pages/Chat.jsx'));
 
-  if (allowedRoles.length > 0 && !allowedRoles.includes(user.role)) {
-    return <Navigate to="/dashboard" replace />;
-  }
-
-  return children;
-}
-
-// Dashboard Layout (Sidebar + content area)
+// Dashboard Layout
 function DashboardLayout({ children }) {
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">
-      {/* Fixed Sidebar */}
       <Sidebar />
-
-      {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        <main className="flex-1 overflow-y-auto pt-16 md:pt-20 p-6 md:p-8 bg-gray-50">
+        <main className="flex-1 overflow-y-auto pt-16 md:pt-20 px-4 sm:px-6 lg:px-8 bg-gray-50">
           {children}
         </main>
       </div>
@@ -80,173 +67,331 @@ function DashboardLayout({ children }) {
   );
 }
 
-function App() {
+// Protected Route with role check
+function ProtectedRoute({ children, allowedRoles = [] }) {
+  const { user, isAuthenticated, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-emerald-600" />
+        <p className="ml-4 text-gray-700 font-medium">Checking authentication...</p>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (allowedRoles.length > 0 && !allowedRoles.includes(user?.role)) {
+    return (
+      <Navigate
+        to={user?.role === 'ngo' ? '/dashboard' : '/'}
+        replace
+      />
+    );
+  }
+
+  return children;
+}
+
+// Public Route wrapper (no auth required)
+function PublicRoute({ children }) {
+  return children;
+}
+
+// Redirect helper: send authenticated user to their role-specific dashboard
+function RedirectToRole() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (user) {
+      let dest = '/dashboard';
+      if (user.role === 'ngo') dest = '/ngo-dashboard';
+      else if (user.role === 'volunteer') dest = '/user-dashboard';
+      else if (user.role === 'admin') dest = '/admin-dashboard';
+      navigate(dest, { replace: true });
+    }
+  }, [user, navigate]);
+
+  // while redirecting, show a loader to avoid blank screen
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-emerald-600" />
+      <p className="ml-4 text-gray-700 font-medium">Redirecting…</p>
+    </div>
+  );
+}
+
+export default function App() {
   return (
     <AuthProvider>
-      <Router>
+      <Router
+        future={{
+          v7_startTransition: true,
+          v7_relativeSplatPath: true,
+        }}
+      >
         <Toaster
           position="top-right"
           toastOptions={{
             duration: 5000,
             style: {
-              borderRadius: '12px',
-              background: '#333',
-              color: '#fff',
+              borderRadius: '10px',
+              background: '#1f2937',
+              color: '#f3f4f6',
+              maxWidth: '500px',
             },
           }}
         />
 
-        {/* Global fixed Header (visible on public & dashboard pages) */}
         <Header />
 
-        <Routes>
-          {/* ── Public Routes ──────────────────────────────────────── */}
-          <Route path="/" element={<Home />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="/login" element={<Login />} />
+        <Suspense
+          fallback={
+            <div className="min-h-screen flex items-center justify-center bg-gray-50">
+              <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-emerald-600" />
+              <p className="ml-4 text-gray-700 font-medium">Loading...</p>
+            </div>
+          }
+        >
+          <Routes>
+            {/* ── Public Routes ── */}
+            <Route path="/" element={<Home />} />
+            <Route path="/how-it-works" element={<HowItWorks />} />
+            <Route path="/locations" element={<CollectionPoints />} />
+            <Route path="/rewards" element={<Rewards />} />
+            <Route path="/about" element={<About />} />
+            <Route path="/contact" element={<Contact />} />
 
-          {/* ── Protected Dashboard & Sub-routes ───────────────────── */}
-          <Route
-            path="/dashboard"
-            element={
-              <ProtectedRoute>
-                <DashboardLayout>
-                  <Dashboard />
-                </DashboardLayout>
-              </ProtectedRoute>
-            }
-          />
+            {/* Public Opportunities List – anyone can browse & apply */}
+            <Route
+              path="/opportunities"
+              element={
+                <PublicRoute>
+                  <PublicOpportunities />
+                </PublicRoute>
+              }
+            />
 
-          {/* Opportunity Management (NGO + Volunteers) */}
-          <Route
-            path="/dashboard/opportunities"
-            element={
-              <ProtectedRoute>
-                <DashboardLayout>
-                  <Opportunities />
-                </DashboardLayout>
-              </ProtectedRoute>
-            }
-          />
+            {/* Auth */}
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
 
-          {/* NGO-only: Edit existing opportunity */}
-          <Route
-            path="/dashboard/opportunities/edit/:opportunityId"
-            element={
-              <ProtectedRoute allowedRoles={['ngo']}>
-                <DashboardLayout>
-                  <EditOpportunity />
-                </DashboardLayout>
-              </ProtectedRoute>
-            }
-          />
+            {/* ── Protected Dashboard Routes ── */}
+            <Route
+              path="/dashboard"
+              element={<ProtectedRoute><RedirectToRole /></ProtectedRoute>}
+            />
 
-          {/* NGO-only: View applications for one opportunity */}
-          <Route
-            path="/dashboard/opportunity-applications/:opportunityId"
-            element={
-              <ProtectedRoute allowedRoles={['ngo']}>
-                <DashboardLayout>
-                  <OpportunityApplications />
-                </DashboardLayout>
-              </ProtectedRoute>
-            }
-          />
+            {/* Role-Specific Dashboards */}
+            <Route
+              path="/user-dashboard"
+              element={
+                <ProtectedRoute allowedRoles={['volunteer']}>
+                  <UserDashboard />
+                </ProtectedRoute>
+              }
+            />
 
-          {/* Volunteer-specific */}
-          <Route
-            path="/dashboard/my-applications"
-            element={
-              <ProtectedRoute>
-                <DashboardLayout>
-                  <MyApplications />
-                </DashboardLayout>
-              </ProtectedRoute>
-            }
-          />
+            <Route
+              path="/ngo-dashboard"
+              element={
+                <ProtectedRoute allowedRoles={['ngo']}>
+                  <NgoDashboard />
+                </ProtectedRoute>
+              }
+            />
 
-          {/* NGO-specific */}
-          <Route
-            path="/dashboard/my-posted"
-            element={
-              <ProtectedRoute allowedRoles={['ngo']}>
-                <DashboardLayout>
-                  <MyPosted />
-                </DashboardLayout>
-              </ProtectedRoute>
-            }
-          />
+            <Route
+              path="/admin-dashboard"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <AdminDashboard />
+                </ProtectedRoute>
+              }
+            />
 
-          {/* Other dashboard sections */}
-          <Route
-            path="/dashboard/pickups"
-            element={
-              <ProtectedRoute>
-                <DashboardLayout>
-                  <Pickups />
-                </DashboardLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/dashboard/volunteers"
-            element={
-              <ProtectedRoute>
-                <DashboardLayout>
-                  <Volunteers />
-                </DashboardLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/dashboard/ngos"
-            element={
-              <ProtectedRoute>
-                <DashboardLayout>
-                  <NGOs />
-                </DashboardLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/dashboard/reports"
-            element={
-              <ProtectedRoute>
-                <DashboardLayout>
-                  <Reports />
-                </DashboardLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/dashboard/settings"
-            element={
-              <ProtectedRoute>
-                <DashboardLayout>
-                  <Settings />
-                </DashboardLayout>
-              </ProtectedRoute>
-            }
-          />
+            {/* Admin Routes */}
+            <Route
+              path="/admin/users"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <AdminUserManagement />
+                </ProtectedRoute>
+              }
+            />
 
-          {/* Profile */}
-          <Route
-            path="/profile"
-            element={
-              <ProtectedRoute>
-                <DashboardLayout>
-                  <Profile />
-                </DashboardLayout>
-              </ProtectedRoute>
-            }
-          />
+            <Route
+              path="/admin/reports"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <AdminReports />
+                </ProtectedRoute>
+              }
+            />
 
-          {/* Catch-all */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+            <Route
+              path="/admin/analytics"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <AdminAnalytics />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Notifications */}
+            <Route
+              path="/notifications"
+              element={
+                <ProtectedRoute>
+                  <Notifications />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/profile"
+              element={
+                <ProtectedRoute>
+                  <DashboardLayout>
+                    <Profile />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Opportunities – NGO/Admin only */}
+            <Route
+              path="/dashboard/opportunities"
+              element={
+                <ProtectedRoute allowedRoles={['ngo', 'admin']}>
+                  <DashboardLayout>
+                    <MyPosted />  {/* Your NGO's posted opportunities list */}
+                  </DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/dashboard/opportunities/create"
+              element={
+                <ProtectedRoute allowedRoles={['ngo']}>
+                  <DashboardLayout>
+                    <CreateOpportunity />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/dashboard/opportunities/edit/:opportunityId"
+              element={
+                <ProtectedRoute allowedRoles={['ngo']}>
+                  <DashboardLayout>
+                    <EditOpportunity />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/dashboard/opportunity-applications/:opportunityId"
+              element={
+                <ProtectedRoute allowedRoles={['ngo']}>
+                  <DashboardLayout>
+                    <OpportunityApplications />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
+            {/* Chat between users */}
+            <Route
+              path="/chat/:userId?"
+              element={
+                <ProtectedRoute>
+                  <DashboardLayout>
+                    <Chat />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
+            {/* Other dashboard pages */}
+            <Route
+              path="/dashboard/my-applications"
+              element={
+                <ProtectedRoute>
+                  <DashboardLayout>
+                    <MyApplications />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/dashboard/pickups"
+              element={
+                <ProtectedRoute>
+                  <DashboardLayout>
+                    <Pickups />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/dashboard/volunteers"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <DashboardLayout>
+                    <Volunteers />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/dashboard/ngos"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <DashboardLayout>
+                    <NGOs />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/dashboard/reports"
+              element={
+                <ProtectedRoute allowedRoles={['admin', 'ngo']}>
+                  <DashboardLayout>
+                    <Reports />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/dashboard/settings"
+              element={
+                <ProtectedRoute>
+                  <DashboardLayout>
+                    <Settings />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Fallback */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Suspense>
+
+        <Footer />
       </Router>
     </AuthProvider>
   );
 }
-
-export default App;

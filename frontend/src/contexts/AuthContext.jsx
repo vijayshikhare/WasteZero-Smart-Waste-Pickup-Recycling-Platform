@@ -1,5 +1,5 @@
 // src/contexts/AuthContext.jsx
-import { createContext, useState, useEffect, useContext } from 'react';
+import { createContext, useState, useEffect, useContext, useMemo } from 'react';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 
@@ -7,79 +7,116 @@ const AuthContext = createContext();
 
 export const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
+// Public API instance (no credentials needed for public endpoints)
+export const publicApi = axios.create({
+  baseURL: API_BASE,
+  headers: { 'Content-Type': 'application/json' },
+});
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  const api = axios.create({
-    baseURL: API_BASE,
-    withCredentials: true,
-    headers: { 'Content-Type': 'application/json' },
-  });
+  const api = useMemo(
+    () =>
+      axios.create({
+        baseURL: API_BASE,
+        withCredentials: true,           // Crucial: sends httpOnly cookies automatically
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    []
+  );
 
-  // Logout only on real 401
-  // Inside AuthProvider
-api.interceptors.response.use(
-  (res) => res,
-  (err) => {
-    if (err.response?.status === 401) {
-      // Only logout if we were previously authenticated
-      if (isAuthenticated) {
-        console.warn('[401] Unauthorized → logging out');
-        setUser(null);
-        setIsAuthenticated(false);
-        localStorage.removeItem('user');
-        toast.error('Session expired. Please log in again.', { duration: 4000 });
+  // Global 401 response interceptor – only logout if we thought we were logged in
+  useEffect(() => {
+    const interceptor = api.interceptors.response.use(
+      (res) => res,
+      (err) => {
+        if (err.response?.status === 401) {
+          if (isAuthenticated) {
+            console.warn('[Auth] 401 detected → forcing logout');
+            toast.error('Session expired. Please log in again.', { duration: 6000 });
+            setUser(null);
+            setIsAuthenticated(false);
+            localStorage.removeItem('user');
+          }
+          // Silent fail on initial/unauthenticated requests
+        }
+        return Promise.reject(err);
       }
-      // Do NOT log out on initial load (401 is normal when not logged in)
+    );
+
+    return () => {
+      api.interceptors.response.eject(interceptor);
+    };
+  }, [api, isAuthenticated]);
+
+  // Normalize user – especially profile picture URLs
+  const normalizeUser = (raw) => {
+    if (!raw) return null;
+
+    let profilePicture = raw.profilePicture;
+    if (profilePicture && !profilePicture.startsWith('http') && !profilePicture.startsWith('blob:')) {
+      profilePicture = `${API_BASE}${profilePicture.startsWith('/') ? '' : '/'}${profilePicture}`;
     }
-    return Promise.reject(err);
-  }
-);
 
-  const normalizeUser = (rawUser) => {
-    if (!rawUser) return null;
-
-    let profilePic = rawUser.profilePicture;
-    if (profilePic && !profilePic.startsWith('http') && !profilePic.startsWith('blob:')) {
-      profilePic = `${API_BASE}${profilePic.startsWith('/') ? '' : '/'}${profilePic}`;
-    }
-
-    return { ...rawUser, profilePicture: profilePic || null };
+    return { ...raw, profilePicture: profilePicture || null };
   };
 
-  // Load from cache (fast UI) — runs once
+  // 1. Fast UI: restore from localStorage on mount
   useEffect(() => {
-    const storedUser = localStorage.getItem('user');
-    if (storedUser) {
-      try {
-        const parsed = JSON.parse(storedUser);
-        setUser(normalizeUser(parsed));
+    try {
+      const stored = localStorage.getItem('user');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        const normalized = normalizeUser(parsed);
+        setUser(normalized);
         setIsAuthenticated(true);
-      } catch (e) {
-        console.warn('[localStorage parse error]', e);
-        localStorage.removeItem('user');
       }
+    } catch (err) {
+      console.warn('Invalid user data in localStorage → cleared');
+      localStorage.removeItem('user');
     }
   }, []);
 
-  // Verify auth once on mount
+  // 2. Server truth check on mount (fixes reload 401 / stale state)
   useEffect(() => {
     const verifyAuth = async () => {
       setLoading(true);
       try {
-        const res = await api.get('/api/auth/profile');
-        const freshUser = normalizeUser(res.data);
+        // Use api instance with credentials to check auth status
+        const { data } = await api.get('/api/auth/profile');
+        const freshUser = normalizeUser(data);
 
-        // Only update if different (prevents loop)
-        if (JSON.stringify(freshUser) !== JSON.stringify(user)) {
-          setUser(freshUser);
-          setIsAuthenticated(true);
-          localStorage.setItem('user', JSON.stringify(freshUser));
-        }
+        setUser(freshUser);
+        setIsAuthenticated(true);
+        localStorage.setItem('user', JSON.stringify(freshUser));
       } catch (err) {
-        // Only clear on real failure
+        // 401 is expected for unauthenticated users – but try token fallback
+        if (err.response?.status === 401) {
+          const storedToken = localStorage.getItem('authToken');
+          if (storedToken) {
+            // set Authorization header and retry once
+            api.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
+            try {
+              const { data: d2 } = await api.get('/api/auth/profile');
+              const freshUser2 = normalizeUser(d2);
+              setUser(freshUser2);
+              setIsAuthenticated(true);
+              localStorage.setItem('user', JSON.stringify(freshUser2));
+              return;
+            } catch (err2) {
+              // fallback to unauthenticated state
+              delete api.defaults.headers.common['Authorization'];
+              localStorage.removeItem('authToken');
+            }
+          }
+        } else if (err.response?.status >= 500) {
+          console.error('[Auth verify failed]', err.message);
+          toast.error('Cannot connect to server');
+        }
+
         setUser(null);
         setIsAuthenticated(false);
         localStorage.removeItem('user');
@@ -89,33 +126,88 @@ api.interceptors.response.use(
     };
 
     verifyAuth();
-  }, []); // empty deps = run once
+  }, [api]);
 
   const login = async (email, password) => {
     try {
       const res = await api.post('/api/auth/login', { email, password });
-      const profileRes = await api.get('/api/auth/profile');
-      const freshUser = normalizeUser(profileRes.data);
+
+      // If server returned token (fallback), store and set header
+      if (res.data?.token) {
+        localStorage.setItem('authToken', res.data.token);
+        api.defaults.headers.common['Authorization'] = `Bearer ${res.data.token}`;
+      }
+
+      // Sync profile immediately after successful login
+      const { data } = await api.get('/api/auth/profile');
+      const freshUser = normalizeUser(data);
+
       setUser(freshUser);
       setIsAuthenticated(true);
       localStorage.setItem('user', JSON.stringify(freshUser));
-      return res.data;
+
+      toast.success('Logged in successfully!');
+      return freshUser;
     } catch (err) {
-      throw err.response?.data || { message: 'Login failed' };
+      const message = err.response?.data?.message || 'Login failed. Please try again.';
+      toast.error(message);
+      throw new Error(message);
+    }
+  };
+
+  // NEW: Dedicated method for OTP verification flow
+  const verifyOtp = async (email, otpCode) => {
+    try {
+      const res = await api.post('/api/auth/verify-otp', {
+        email,
+        otp: otpCode,
+      });
+
+      if (res.data?.token) {
+        localStorage.setItem('authToken', res.data.token);
+        api.defaults.headers.common['Authorization'] = `Bearer ${res.data.token}`;
+      }
+
+      // Critical: fetch profile right after verify to activate session
+      const { data } = await api.get('/api/auth/profile');
+      const freshUser = normalizeUser(data);
+
+      setUser(freshUser);
+      setIsAuthenticated(true);
+      localStorage.setItem('user', JSON.stringify(freshUser));
+
+      toast.success('OTP verified! Welcome back.');
+      return freshUser;
+    } catch (err) {
+      const message = err.response?.data?.message || 'Invalid or expired OTP. Please try again.';
+      toast.error(message);
+      throw new Error(message);
     }
   };
 
   const register = async (data) => {
     try {
       const res = await api.post('/api/auth/register', data);
-      const profileRes = await api.get('/api/auth/profile');
-      const freshUser = normalizeUser(profileRes.data);
+
+      if (res.data?.token) {
+        localStorage.setItem('authToken', res.data.token);
+        api.defaults.headers.common['Authorization'] = `Bearer ${res.data.token}`;
+      }
+
+      // Assuming register auto-logs in (common pattern)
+      const { data: profile } = await api.get('/api/auth/profile');
+      const freshUser = normalizeUser(profile);
+
       setUser(freshUser);
       setIsAuthenticated(true);
       localStorage.setItem('user', JSON.stringify(freshUser));
-      return res.data;
+
+      toast.success('Registered and logged in successfully!');
+      return freshUser;
     } catch (err) {
-      throw err.response?.data || { message: 'Registration failed' };
+      const message = err.response?.data?.message || 'Registration failed.';
+      toast.error(message);
+      throw new Error(message);
     }
   };
 
@@ -124,8 +216,8 @@ api.interceptors.response.use(
       await api.post('/api/auth/logout');
       toast.success('Logged out successfully');
     } catch (err) {
-      console.warn('[Logout failed]', err);
-      toast.error('Logout failed, but signed out locally');
+      console.warn('[Logout failed on server]', err);
+      toast.error('Server logout failed, but signed out locally');
     } finally {
       localStorage.removeItem('user');
       setUser(null);
@@ -138,41 +230,46 @@ api.interceptors.response.use(
       await api.patch('/api/auth/profile', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      const profileRes = await api.get('/api/auth/profile');
-      const freshUser = normalizeUser(profileRes.data);
+
+      // Refresh after update
+      const { data } = await api.get('/api/auth/profile');
+      const freshUser = normalizeUser(data);
+
       setUser(freshUser);
-      setIsAuthenticated(true);
       localStorage.setItem('user', JSON.stringify(freshUser));
-      toast.success('Profile updated successfully');
-      return user;
+
+      toast.success('Profile updated successfully!');
+      return freshUser;
     } catch (err) {
-      const msg = err.response?.data?.message || 'Failed to update profile';
-      toast.error(msg);
-      throw msg;
+      const message = err.response?.data?.message || 'Failed to update profile';
+      toast.error(message);
+      throw new Error(message);
     }
   };
 
-  return (
-    <AuthContext.Provider
-      value={{
-        user,
-        isAuthenticated,
-        loading,
-        login,
-        register,
-        logout,
-        updateProfile,
-        api,
-        API_BASE,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
+  const value = useMemo(
+    () => ({
+      user,
+      isAuthenticated,
+      loading,
+      login,
+      verifyOtp,          // ← NEW – use this in Login/OTP component
+      register,
+      logout,
+      updateProfile,
+      api,
+      API_BASE,
+    }),
+    [user, isAuthenticated, loading, api]
   );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (!context) throw new Error('useAuth must be used within AuthProvider');
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
   return context;
 };

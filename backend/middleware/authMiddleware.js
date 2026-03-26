@@ -1,4 +1,3 @@
-// middleware/authMiddleware.js
 const jwt = require('jsonwebtoken');
 const asyncHandler = require('express-async-handler');
 
@@ -9,91 +8,103 @@ const asyncHandler = require('express-async-handler');
 const protect = asyncHandler(async (req, res, next) => {
   let token;
 
-  // 1. Primary: httpOnly cookie (most secure)
+  // 1. Prefer httpOnly cookie (most secure for browser clients)
   if (req.cookies?.accessToken) {
     token = req.cookies.accessToken;
   }
-  // 2. Fallback: Bearer token (mobile, Postman, external clients)
-  else if (req.headers.authorization?.startsWith('Bearer')) {
+  // 2. Fallback: Bearer token (useful for Postman, mobile apps, etc.)
+  else if (req.headers.authorization?.startsWith('Bearer ')) {
     token = req.headers.authorization.split(' ')[1];
   }
 
   if (!token) {
+    console.log('[AUTH PROTECT] No token found', {
+      hasCookie: !!req.cookies?.accessToken,
+      hasBearer: !!req.headers.authorization,
+      url: req.originalUrl,
+    });
+
     return res.status(401).json({
       success: false,
-      message: 'Not authorized - no token provided',
+      message: 'Not authorized - no authentication token provided',
     });
   }
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    // Attach minimal user info
     req.user = {
       id: decoded.id,
       role: decoded.role,
     };
 
-    // Optional: log successful auth (only in dev)
+    // Helpful dev logging - remove or reduce in production
     if (process.env.NODE_ENV === 'development') {
-      console.log(`[AUTH] User ${req.user.id} (${req.user.role}) authenticated`);
+      console.log(`[AUTH PROTECT] SUCCESS → User ${req.user.id} (${req.user.role}) on ${req.method} ${req.originalUrl}`);
     }
 
     next();
   } catch (error) {
-    console.error('[AUTH PROTECT]', {
-      error: error.name,
-      message: error.message,
-      tokenPreview: token.substring(0, 20) + (token.length > 20 ? '...' : ''),
-    });
+    // Detailed dev logging to help debug 401s
+    if (process.env.NODE_ENV === 'development') {
+      console.error('[AUTH PROTECT] Verification failed:', {
+        errorName: error.name,
+        errorMessage: error.message,
+        tokenPreview: token.length > 10 ? token.substring(0, 10) + '...' : token,
+        url: req.originalUrl,
+      });
+    }
 
     let status = 401;
-    let message = 'Not authorized - invalid token';
+    let message = 'Not authorized - invalid or expired token';
 
     if (error.name === 'TokenExpiredError') {
-      message = 'Not authorized - token has expired';
+      message = 'Session expired - please log in again';
+      status = 401; // could be 440 in some conventions, but 401 is standard
     } else if (error.name === 'JsonWebTokenError') {
-      message = 'Not authorized - malformed token';
+      message = 'Invalid authentication token';
     } else if (error.name === 'NotBeforeError') {
-      message = 'Not authorized - token not yet active';
+      message = 'Token not yet valid';
     }
 
     return res.status(status).json({
       success: false,
       message,
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined,
+      // Only expose in dev - helps debugging without leaking in prod
+      ...(process.env.NODE_ENV === 'development' && { debug: error.message }),
     });
   }
 });
 
 /**
- * Restrict route to admin users only
+ * Restrict to admin users only
  */
 const adminOnly = (req, res, next) => {
   if (!req.user || req.user.role !== 'admin') {
     return res.status(403).json({
       success: false,
-      message: 'Access denied - administrators only',
+      message: 'Access denied - administrator privileges required',
     });
   }
   next();
 };
 
 /**
- * Restrict route to NGO users only
+ * Restrict to NGO users only
  */
 const ngoOnly = (req, res, next) => {
   if (!req.user || req.user.role !== 'ngo') {
     return res.status(403).json({
       success: false,
-      message: 'Access denied - NGOs only',
+      message: 'Access denied - NGO account required',
     });
   }
   next();
 };
 
 /**
- * Allow volunteers, NGOs, and admins (most common protected routes)
+ * Allow volunteers, NGOs, and admins
+ * Useful for routes that multiple roles can access
  */
 const volunteerOrHigher = (req, res, next) => {
   if (!req.user || !['volunteer', 'ngo', 'admin'].includes(req.user.role)) {

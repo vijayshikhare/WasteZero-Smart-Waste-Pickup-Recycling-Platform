@@ -228,6 +228,18 @@ export default function MyApplications() {
                         )}
                       </div>
                     )}
+
+                    {/* chat with NGO button */}
+                    {opp.ngo_id && opp.ngo_id._id && (
+                      <div className="mt-4">
+                        <Link
+                          to={`/chat/${opp.ngo_id._id}`}
+                          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm"
+                        >
+                          <Users size={16} /> Chat with NGO
+                        </Link>
+                      </div>
+                    )}
                   </div>
                 </div>
               );

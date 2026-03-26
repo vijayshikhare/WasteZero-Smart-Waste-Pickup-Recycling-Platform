@@ -25,7 +25,7 @@ export default function Login() {
   const [authMode, setAuthMode] = useState('password'); // 'password' | 'otp'
   const [otpSent, setOtpSent] = useState(false);
 
-  const { login, api } = useAuth();
+  const { login, api, isAuthenticated, user } = useAuth(); // ← added isAuthenticated, user for redirection
   const navigate = useNavigate();
 
   // Refs for OTP inputs (auto-focus)
@@ -37,6 +37,24 @@ export default function Login() {
       otpRefs.current[0].focus();
     }
   }, [authMode, otpSent]);
+
+  // ← NEW: Navigate only AFTER isAuthenticated becomes true
+  // Determine appropriate landing path based on role
+  useEffect(() => {
+    if (isAuthenticated && api) {
+      const dest = (user) => {
+        if (user?.role === 'ngo') return '/ngo-dashboard';
+        if (user?.role === 'volunteer') return '/user-dashboard';
+        if (user?.role === 'admin') return '/admin-dashboard';
+        return '/dashboard';
+      };
+      // we can access user via api.defaults header or call profile if needed,
+      // but once isAuthenticated true the context will have user set.
+      // useAuth returns user as well so we can destructure above.
+      const redirectPath = dest(user);
+      if (redirectPath) navigate(redirectPath, { replace: true });
+    }
+  }, [isAuthenticated, navigate, api]);
 
   const handlePasswordSubmit = async (e) => {
     e.preventDefault();
@@ -61,8 +79,7 @@ export default function Login() {
 
     try {
       await login(cleanEmail, cleanPass);
-      toast.success('Login successful! Welcome back.');
-      navigate('/dashboard', { replace: true });
+      // NO navigate here anymore → useEffect will handle it when isAuthenticated flips
     } catch (err) {
       let msg = 'Invalid email or password. Please try again.';
 
@@ -141,7 +158,8 @@ export default function Login() {
       });
 
       toast.success('OTP verified! Welcome back.');
-      navigate('/dashboard', { replace: true });
+      // NO navigate here anymore → useEffect will handle when isAuthenticated = true
+      // If your backend auto-logs in on verify-otp (sets cookie/session), AuthContext interceptor/verify will set isAuthenticated=true
     } catch (err) {
       const msg = err.response?.data?.message || 'Invalid or expired OTP. Please try again.';
       setError(msg);

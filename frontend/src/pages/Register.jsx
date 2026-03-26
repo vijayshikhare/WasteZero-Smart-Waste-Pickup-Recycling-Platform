@@ -13,6 +13,8 @@ export default function Register() {
     email: '',
     password: '',
     role: 'volunteer',
+    ngoCertificationCode: '',
+    adminSecretKey: '',
   });
   const [showPassword, setShowPassword] = useState(false);
   const [otp, setOtp] = useState(['', '', '', '', '', '']); // 6 separate digits
@@ -61,6 +63,19 @@ export default function Register() {
       return;
     }
 
+    // Validate authorization codes
+    if (formData.role === 'ngo' && !formData.ngoCertificationCode.trim()) {
+      setError('NGO Certification Code is required');
+      toast.error('Please enter your NGO Certification Code');
+      return;
+    }
+
+    if (formData.role === 'admin' && !formData.adminSecretKey.trim()) {
+      setError('Admin Master Key is required');
+      toast.error('Please enter the Admin Master Key');
+      return;
+    }
+
     setIsLoading(true);
 
     try {
@@ -69,9 +84,10 @@ export default function Register() {
         email: formData.email.trim(),
         password: formData.password.trim(),
         role: formData.role,
+        ngoCertificationCode: formData.ngoCertificationCode.trim(),
+        adminSecretKey: formData.adminSecretKey.trim(),
       });
-
-      toast.success('Registration successful! Welcome to WasteZero.');
+      // AuthContext will show a success toast on successful registration
       await checkAuth();
       navigate('/dashboard', { replace: true });
     } catch (err) {
@@ -100,6 +116,19 @@ export default function Register() {
     if (!nameTrim || !emailTrim) {
       setError('Name and email are required');
       toast.error('Name and email are required');
+      return;
+    }
+
+    // Validate authorization codes
+    if (formData.role === 'ngo' && !formData.ngoCertificationCode.trim()) {
+      setError('NGO Certification Code is required');
+      toast.error('Please enter your NGO Certification Code');
+      return;
+    }
+
+    if (formData.role === 'admin' && !formData.adminSecretKey.trim()) {
+      setError('Admin Master Key is required');
+      toast.error('Please enter the Admin Master Key');
       return;
     }
 
@@ -136,16 +165,32 @@ export default function Register() {
       return;
     }
 
+    // Validate authorization codes
+    if (formData.role === 'ngo' && !formData.ngoCertificationCode.trim()) {
+      setError('NGO Certification Code is required');
+      toast.error('Please enter your NGO Certification Code');
+      return;
+    }
+
+    if (formData.role === 'admin' && !formData.adminSecretKey.trim()) {
+      setError('Admin Master Key is required');
+      toast.error('Please enter the Admin Master Key');
+      return;
+    }
+
     setError('');
     setIsLoading(true);
 
     try {
       await api.post('/api/auth/verify-otp', { 
         email: formData.email.trim(), 
-        otp: cleanOtp 
+        otp: cleanOtp,
+        role: formData.role,
+        ngoCertificationCode: formData.ngoCertificationCode.trim(),
+        adminSecretKey: formData.adminSecretKey.trim(),
       });
 
-      toast.success('OTP verified! Welcome to WasteZero.');
+      // AuthContext will show a success toast on successful OTP verification
       await checkAuth();
       navigate('/dashboard', { replace: true });
     } catch (err) {
@@ -248,6 +293,46 @@ export default function Register() {
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
                     <User className="h-5 w-5 text-gray-400" />
                   </div>
+
+                  {/* NGO Certification Code - Only for NGO (password flow) */}
+                  {formData.role === 'ngo' && (
+                    <div className="p-4 rounded-lg bg-blue-50 border border-blue-200">
+                      <label htmlFor="ngoCertificationCodePw" className="block text-sm font-medium text-blue-900 mb-1.5">
+                        🏢 NGO Certification Code
+                      </label>
+                      <p className="text-xs text-blue-700 mb-2">Enter the certification code provided by WasteZero admins for your organization</p>
+                      <input
+                        id="ngoCertificationCodePw"
+                        type="password"
+                        name="ngoCertificationCode"
+                        value={formData.ngoCertificationCode}
+                        onChange={handleChange}
+                        className="block w-full px-4 py-2.5 border border-blue-300 bg-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                        placeholder="Enter your NGO certification code"
+                        disabled={isLoading}
+                      />
+                    </div>
+                  )}
+
+                  {/* Admin Secret Key - Only for Admin (password flow) */}
+                  {formData.role === 'admin' && (
+                    <div className="p-4 rounded-lg bg-purple-50 border border-purple-200">
+                      <label htmlFor="adminSecretKeyPw" className="block text-sm font-medium text-purple-900 mb-1.5">
+                        👨‍💼 Admin Master Key
+                      </label>
+                      <p className="text-xs text-purple-700 mb-2">Enter the master key to register as a platform administrator</p>
+                      <input
+                        id="adminSecretKeyPw"
+                        type="password"
+                        name="adminSecretKey"
+                        value={formData.adminSecretKey}
+                        onChange={handleChange}
+                        className="block w-full px-4 py-2.5 border border-purple-300 bg-white rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors"
+                        placeholder="Enter admin master key"
+                        disabled={isLoading}
+                      />
+                    </div>
+                  )}
                   <input
                     id="name"
                     type="text"
@@ -339,8 +424,9 @@ export default function Register() {
                         className="block w-full pl-11 pr-4 py-3 border border-gray-300 bg-white rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors appearance-none"
                         disabled={isLoading}
                       >
-                        <option value="volunteer">Volunteer / Individual</option>
-                        <option value="ngo">NGO / Organization</option>
+                        <option value="volunteer">🤝 Volunteer / Individual</option>
+                        <option value="ngo">🏢 NGO / Organization</option>
+                        <option value="admin">👨‍💼 Admin / Platform Manager</option>
                       </select>
                     </div>
                   </div>
@@ -392,11 +478,52 @@ export default function Register() {
                         className="block w-full pl-11 pr-4 py-3 border border-gray-300 bg-white rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors appearance-none"
                         disabled={isLoading}
                       >
-                        <option value="volunteer">Volunteer / Individual</option>
-                        <option value="ngo">NGO / Organization</option>
+                        <option value="volunteer">🤝 Volunteer / Individual</option>
+                        <option value="ngo">🏢 NGO / Organization</option>
+                        <option value="admin">👨‍💼 Admin / Platform Manager</option>
                       </select>
                     </div>
                   </div>
+
+                  {/* NGO Certification Code - Only for NGO */}
+                  {formData.role === 'ngo' && (
+                    <div className="p-4 rounded-lg bg-blue-50 border border-blue-200">
+                      <label htmlFor="ngoCertificationCodeOtp" className="block text-sm font-medium text-blue-900 mb-1.5">
+                        🏢 NGO Certification Code
+                      </label>
+                      <p className="text-xs text-blue-700 mb-2">Enter the certification code provided by WasteZero admins for your organization</p>
+                      <input
+                        id="ngoCertificationCodeOtp"
+                        type="password"
+                        name="ngoCertificationCode"
+                        value={formData.ngoCertificationCode}
+                        onChange={handleChange}
+                        className="block w-full px-4 py-2.5 border border-blue-300 bg-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                        placeholder="Enter your NGO certification code"
+                        disabled={isLoading}
+                      />
+                    </div>
+                  )}
+
+                  {/* Admin Secret Key - Only for Admin */}
+                  {formData.role === 'admin' && (
+                    <div className="p-4 rounded-lg bg-purple-50 border border-purple-200">
+                      <label htmlFor="adminSecretKeyOtp" className="block text-sm font-medium text-purple-900 mb-1.5">
+                        👨‍💼 Admin Master Key
+                      </label>
+                      <p className="text-xs text-purple-700 mb-2">Enter the master key to register as a platform administrator</p>
+                      <input
+                        id="adminSecretKeyOtp"
+                        type="password"
+                        name="adminSecretKey"
+                        value={formData.adminSecretKey}
+                        onChange={handleChange}
+                        className="block w-full px-4 py-2.5 border border-purple-300 bg-white rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors"
+                        placeholder="Enter admin master key"
+                        disabled={isLoading}
+                      />
+                    </div>
+                  )}
 
                   {!otpSent ? (
                     <button

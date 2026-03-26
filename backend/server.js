@@ -1,3 +1,5 @@
+// All secrets and sensitive configuration must be loaded from environment variables only.
+// Ensure .env is NOT committed to version control. See .env.example for structure.
 require("dotenv").config();
 const express = require("express");
 const mongoose = require("mongoose");

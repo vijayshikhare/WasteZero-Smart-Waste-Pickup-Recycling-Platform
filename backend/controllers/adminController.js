@@ -1,4 +1,6 @@
 // controllers/adminController.js
+// All secrets and sensitive configuration must be loaded from environment variables only.
+// Do not hardcode secrets or tokens in this file.
 const User = require('../models/User');
 const Opportunity = require('../models/Opportunity');
 const Application = require('../models/Application');

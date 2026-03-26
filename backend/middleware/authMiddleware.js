@@ -1,3 +1,5 @@
+// All secrets and sensitive configuration must be loaded from environment variables only.
+// Do not hardcode secrets or tokens in this file.
 const jwt = require('jsonwebtoken');
 const asyncHandler = require('express-async-handler');
 

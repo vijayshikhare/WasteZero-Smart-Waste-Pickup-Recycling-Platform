@@ -1,4 +1,6 @@
 // src/contexts/AuthContext.jsx
+// All secrets and sensitive configuration must be loaded from environment variables only.
+// Do not hardcode secrets, tokens, or API keys in this file.
 import { createContext, useState, useEffect, useContext, useMemo } from 'react';
 import axios from 'axios';
 import toast from 'react-hot-toast';

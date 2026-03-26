@@ -4,13 +4,17 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Live%20Demo-WasteZero-00C7B7?logo=vercel&logoColor=white&style=for-the-badge" />
-  <img src="https://img.shields.io/github/stars/vijayshikhare/WasteZero?style=for-the-badge" />
-  <img src="https://img.shields.io/github/forks/vijayshikhare/WasteZero?style=for-the-badge" />
+  <img src="https://img.shields.io/github/stars/vijayshikhare/WasteZero-Smart-Waste-Pickup-Recycling-Platform?style=for-the-badge" />
+  <img src="https://img.shields.io/github/forks/vijayshikhare/WasteZero-Smart-Waste-Pickup-Recycling-Platform?style=for-the-badge" />
   <img src="https://img.shields.io/github/followers/vijayshikhare?style=for-the-badge&label=Follow" />
-  <img src="https://img.shields.io/github/issues/vijayshikhare/WasteZero?style=for-the-badge" />
-  <img src="https://img.shields.io/github/last-commit/vijayshikhare/WasteZero?style=for-the-badge" />
-  <img src="https://img.shields.io/github/languages/top/vijayshikhare/WasteZero?style=for-the-badge" />
-  <img src="https://img.shields.io/github/license/vijayshikhare/WasteZero?style=for-the-badge" />
+  <img src="https://img.shields.io/github/issues/vijayshikhare/WasteZero-Smart-Waste-Pickup-Recycling-Platform?style=for-the-badge" />
+  <img src="https://img.shields.io/github/issues-closed/vijayshikhare/WasteZero-Smart-Waste-Pickup-Recycling-Platform?style=for-the-badge" />
+  <img src="https://img.shields.io/github/pulls/vijayshikhare/WasteZero-Smart-Waste-Pickup-Recycling-Platform?style=for-the-badge" />
+  <img src="https://img.shields.io/github/last-commit/vijayshikhare/WasteZero-Smart-Waste-Pickup-Recycling-Platform?style=for-the-badge" />
+  <img src="https://img.shields.io/github/languages/top/vijayshikhare/WasteZero-Smart-Waste-Pickup-Recycling-Platform?style=for-the-badge" />
+  <img src="https://img.shields.io/github/languages/count/vijayshikhare/WasteZero-Smart-Waste-Pickup-Recycling-Platform?style=for-the-badge" />
+  <img src="https://img.shields.io/github/repo-size/vijayshikhare/WasteZero-Smart-Waste-Pickup-Recycling-Platform?style=for-the-badge" />
+  <img src="https://img.shields.io/github/license/vijayshikhare/WasteZero-Smart-Waste-Pickup-Recycling-Platform?style=for-the-badge" />
 </p>
 
 <p align="center">
@@ -21,6 +25,7 @@
   <img src="https://img.shields.io/badge/Tailwind-CSS-38B2AC?logo=tailwindcss&logoColor=white&style=flat-square" />
   <img src="https://img.shields.io/badge/Socket.io-Realtime-010101?logo=socket.io&logoColor=white&style=flat-square" />
 </p>
+
 
 <p align="center">
   <b>Smart Waste Management Platform for Jalgaon, India</b><br>

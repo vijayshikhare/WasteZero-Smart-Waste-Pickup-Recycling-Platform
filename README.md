@@ -68,8 +68,9 @@ WasteZero is a modern, full-stack, open-source platform designed to revolutioniz
 ## 📊 GitHub Stats
 
 <p align="center">
-  <img src="https://github-readme-stats.vercel.app/api/pin/?username=vijayshikhare&repo=WasteZero-Smart-Waste-Pickup-Recycling-Platform&theme=react&show_owner=true" />
-  <img src="https://github-readme-stats.vercel.app/api/top-langs/?username=vijayshikhare&layout=compact&theme=react" />
+  <img src="https://github-readme-stats.vercel.app/api/pin/?username=vijayshikhare&repo=WasteZero-Smart-Waste-Pickup-Recycling-Platform&theme=react&show_owner=true&cache_seconds=1800" />
+  
+  <img src="https://github-readme-stats.vercel.app/api/top-langs/?username=vijayshikhare&layout=compact&theme=react&cache_seconds=1800" />
 </p>
 
 ---
